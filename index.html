@@ -1,0 +1,1040 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cell Defense</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one-screen game console. Map canvas left, command panel right; stacks on narrow screens. */
+:root{
+  --ink:#0b1719;        /* deep cytosol */
+  --panel:#11252a;
+  --panel-2:#183238;
+  --line:#2a4c53;
+  --tile:#5fd3a6;       /* chlorophyll accent */
+  --text:#e8f1ec;
+  --muted:#9db7b3;
+  --good:#7bd88f;
+  --bad:#ef6f5e;
+  --gold:#f2c94c;       /* ATP */
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"Figtree", "Segoe UI", system-ui, sans-serif;
+  color-scheme:dark;
+}
+html,body{height:100%}
+[hidden]{display:none!important}
+body{background:var(--ink);color:var(--text);font-family:var(--f-body);font-size:15px;line-height:1.45;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));padding-block:12px;box-sizing:border-box}
+*,*::before,*::after{box-sizing:border-box}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid var(--tile);outline-offset:2px}
+.app{max-width:1280px;margin:0 auto;display:grid;gap:12px}
+header.bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px}
+.brand{display:flex;flex-direction:column;margin-right:auto;min-width:0}
+.brand h1{font-family:var(--f-display);font-weight:700;font-size:26px;margin:0;letter-spacing:-.01em;line-height:1.1}
+.brand span{color:var(--muted);font-size:13px}
+.stats{display:flex;gap:8px;flex-wrap:wrap}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 12px;display:flex;flex-direction:column;min-width:84px}
+.stat b{font-size:19px;font-variant-numeric:tabular-nums;line-height:1.1}
+.stat small{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em}
+.stat.gold b{color:var(--gold)} .stat.trade b{color:var(--good)} .stat.trade.low b{color:var(--bad)}
+.menu{display:flex;gap:6px;flex-wrap:wrap}
+.btn{background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:8px 13px;font-weight:600;font-size:14px}
+.btn:hover{border-color:var(--tile)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.primary{background:var(--tile);border-color:var(--tile);color:#062019}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.ghost{background:transparent}
+.btn.danger{border-color:var(--bad);color:var(--bad);background:transparent}
+main.play{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:12px;align-items:start}
+.board{position:relative;min-width:0}
+canvas{display:block;width:100%;height:auto;border-radius:10px;border:1px solid var(--line);background:#0a1416;touch-action:manipulation}
+.toast{position:absolute;left:50%;top:14px;transform:translateX(-50%);background:var(--panel-2);border:1px solid var(--tile);border-radius:8px;padding:8px 14px;font-weight:600;font-size:14px;pointer-events:none;max-width:90%;text-align:center}
+aside.side{display:grid;gap:12px;min-width:0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}
+.card h3{font-family:var(--f-display);font-weight:700;font-size:18px;margin:0 0 8px}
+.eyebrow{text-transform:uppercase;letter-spacing:.1em;font-size:11px;color:var(--tile);font-weight:700}
+.shop{display:grid;gap:6px}
+.shop button{display:grid;grid-template-columns:34px 1fr auto;gap:10px;align-items:center;text-align:left;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:7px 9px}
+.shop button.sel{border-color:var(--tile);box-shadow:inset 0 0 0 1px var(--tile)}
+.shop button:disabled{opacity:.5}
+.shop .ico{width:34px;height:34px;border-radius:7px;display:grid;place-items:center;font-size:12px;color:#06150f;font-weight:700}
+.shop .nm{font-weight:600;font-size:14px;line-height:1.2}
+.shop .ds{color:var(--muted);font-size:12px;line-height:1.25}
+.shop .cost{color:var(--gold);font-weight:700;font-variant-numeric:tabular-nums}
+.btn.primary .key{color:#062019;border-color:rgba(6,32,25,.4)}
+.key{color:var(--muted);font-size:11px;border:1px solid var(--line);border-radius:4px;padding:0 4px;margin-left:4px}
+.sel-info p{margin:4px 0;font-size:13.5px}
+.sel-info .row{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.muted{color:var(--muted)}
+.chip{display:inline-block;border:1px solid var(--tile);color:var(--tile);border-radius:999px;font-size:11.5px;padding:1px 8px;margin:2px 4px 2px 0;font-weight:600}
+.wavebar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.wavebar .btn.primary{flex:1;padding:11px 14px;font-size:15px}
+/* modal */
+.overlay{position:fixed;inset:0;background:rgba(4,10,12,.8);display:grid;place-items:center;z-index:50;
+  padding:max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));overflow:auto}
+.modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:740px;width:100%;padding:22px 24px;max-height:100%;overflow:auto}
+.modal h2{font-family:var(--f-display);font-weight:700;font-size:25px;margin:4px 0 12px;text-wrap:balance;line-height:1.15;letter-spacing:-.01em}
+.modal p{margin:8px 0;max-width:68ch}
+.stim{background:#f3f6f1;color:#1d2a26;border-radius:8px;padding:14px 16px;font-size:15px;line-height:1.5;margin:10px 0}
+.stim p{margin:0 0 8px}
+.stim .src{display:block;font-size:12.5px;color:#4f625c;margin-top:8px}
+.stim svg{display:block;width:100%;max-width:540px;height:auto;margin:6px auto 0}
+.dtwrap{overflow-x:auto}
+table.dt{border-collapse:collapse;margin:6px 0;font-size:14px;font-variant-numeric:tabular-nums;min-width:60%}
+table.dt th,table.dt td{border:1px solid #b9c8c2;padding:5px 10px;text-align:center}
+table.dt th{background:#e1eae5;font-weight:600}
+table.dt td:first-child,table.dt th:first-child{text-align:left}
+.qtext{font-weight:600;font-size:16px}
+.choices{display:grid;gap:8px;margin-top:10px}
+.choices button{text-align:left;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;display:grid;grid-template-columns:26px 1fr;gap:8px;line-height:1.35}
+.choices button:hover:not(:disabled){border-color:var(--tile)}
+.choices button b{color:var(--muted)}
+.choices button.right{border-color:var(--good);background:rgba(123,216,143,.14)}
+.choices button.wrong{border-color:var(--bad);background:rgba(239,111,94,.14)}
+.choices button:disabled{cursor:default}
+.feedback{border-left:3px solid var(--tile);padding:6px 12px;margin-top:12px;background:var(--panel-2);border-radius:0 8px 8px 0}
+.feedback.ok{border-color:var(--good)} .feedback.no{border-color:var(--bad)}
+.actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap}
+.tags{display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 6px}
+.tag{font-size:11.5px;border-radius:999px;padding:1px 9px;background:var(--panel-2);border:1px solid var(--line);color:var(--muted)}
+textarea,input[type=password],input[type=text]{width:100%;background:#0b1a1d;border:1px solid var(--line);border-radius:8px;color:var(--text);font:inherit;padding:9px 10px}
+textarea{min-height:70px;resize:vertical}
+label.part{display:block;font-weight:600;margin:12px 0 4px}
+.rubric{background:var(--panel-2);border-radius:8px;padding:10px 12px;margin:8px 0}
+.rubric ul{margin:6px 0 4px;padding-left:18px}
+.rubric li{margin:2px 0;font-size:14px}
+.yours{white-space:pre-wrap;font-size:14px;color:var(--muted);border-left:2px solid var(--line);padding-left:10px;margin:6px 0}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+table.stats{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+table.stats th,table.stats td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+table.stats th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+.tablewrap{overflow-x:auto}
+.meter{height:8px;background:var(--panel-2);border-radius:99px;overflow:hidden;min-width:60px}
+.meter i{display:block;height:100%;background:var(--tile)}
+.stars{font-size:34px;color:var(--gold);letter-spacing:6px}
+.levelcard{border:1px solid var(--line);border-radius:10px;padding:14px;background:var(--panel-2);display:grid;gap:4px}
+.levelcard.locked{opacity:.55}
+ul.how{padding-left:18px;margin:8px 0}
+ul.how li{margin:4px 0}
+h3.sec{font-family:var(--f-display);font-weight:700;font-size:19px;margin:18px 0 6px}
+@media (max-width:900px){main.play{grid-template-columns:1fr}}
+@media (max-width:520px){.brand h1{font-size:22px}.modal{padding:16px}.modal h2{font-size:21px}.stat{min-width:70px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="bar">
+    <div class="brand"><h1>Cell Defense</h1><span id="levelName">Level 1 · The Cell (Campbell ch. 6–12)</span></div>
+    <div class="stats">
+      <div class="stat trade" id="tradeBox"><small>Health</small><b id="trade">20</b></div>
+      <div class="stat gold"><small>ATP</small><b id="gold">0</b></div>
+      <div class="stat"><small>Wave</small><b id="wave">0/10</b></div>
+    </div>
+    <nav class="menu">
+      <button class="btn ghost" id="codexBtn">Codex</button>
+      <button class="btn ghost" id="progressBtn">Progress</button>
+      <button class="btn ghost" id="settingsBtn">Settings</button>
+      <button class="btn ghost" id="menuBtn">Menu</button>
+    </nav>
+  </header>
+
+  <main class="play">
+    <div class="board">
+      <canvas id="cv" width="960" height="576" aria-label="Game map: the inside of a plant cell"></canvas>
+      <div class="toast" id="toast" hidden></div>
+    </div>
+    <aside class="side">
+      <div class="card">
+        <div class="wavebar">
+          <button class="btn primary" id="startBtn">Start wave 1 <span class="key">Space</span></button>
+          <button class="btn" id="speedBtn" title="Game speed">1×</button>
+        </div>
+        <div class="wavebar" style="margin-top:8px">
+          <button class="btn" id="studyBtn" style="flex:1">Study for ATP (+25)</button>
+        </div>
+        <p class="muted" id="hint" style="margin:8px 0 0;font-size:13px">Build a few organelles, then start the wave. You answer one exam question before each wave.</p>
+      </div>
+      <div class="card">
+        <h3>Build</h3>
+        <div class="shop" id="shop"></div>
+      </div>
+      <div class="card sel-info" id="selInfo" hidden></div>
+    </aside>
+  </main>
+</div>
+
+<div class="overlay" id="overlay" hidden><div class="modal" id="modal" role="dialog" aria-modal="true"></div></div>
+
+<script>
+(() => {
+"use strict";
+// ---------- constants ----------
+const COLS = 20, ROWS = 12, T = 48, W = COLS * T, H = ROWS * T;
+const SAVE_KEY = "cell-defense-save-v1", KEY_KEY = "cell-defense-apikey", SNAP_KEY = "cell-defense-run-v1";
+const MODEL = "claude-sonnet-5-5";
+const LEVEL_ID = "cell";
+const PATH = [[20.5,2.5],[15.5,2.5],[15.5,6.5],[18.5,6.5],[18.5,9.5],[11.5,9.5],[11.5,3.5],[6.5,3.5],[6.5,8.5],[3.5,8.5],[3.5,5.5],[1.2,5.5]].map(([x,y]) => ({x:x*T, y:y*T}));
+const NUC = {x:0.9*T, y:5.5*T, rx:1.7*T, ry:2.3*T};
+const LABELS = [
+  {n:"Breach in the membrane", sub:"threats enter here", x:17.6, y:1.25},
+  {n:"Cytosol", x:13.5, y:5.2},
+  {n:"Nucleus", sub:"protect the DNA", x:1.6, y:2.6}
+];
+
+const TOWERS = {
+  perox: {key:"1", name:"Peroxisome", short:"PER", color:"#f2c94c", cost:50, dmg:7, rate:0.38, range:135, kind:"shot",
+          role:"Fast shots, long range",
+          bio:"A small compartment packed with enzymes that strip hydrogen from harmful molecules. It makes hydrogen peroxide (H₂O₂) as a by-product and then breaks it down to water with the enzyme catalase. (Ch. 6)"},
+  vac:   {key:"2", name:"Central Vacuole", short:"VAC", color:"#5fa8e8", cost:80, dmg:30, rate:1.05, range:100, kind:"shot",
+          role:"Heavy hits, short range",
+          bio:"A large sac in plant cells. It stores water and chemicals, and it holds digestive enzymes that break down large molecules, the job lysosomes do in animal cells. (Ch. 6)"},
+  cyto:  {key:"3", name:"Cytoskeleton", short:"CYT", color:"#b9a6f2", cost:60, dmg:0, rate:0, range:95, kind:"slow", slow:0.45,
+          role:"Slows every threat nearby",
+          bio:"A network of protein fibres (microtubules, microfilaments and intermediate filaments) that gives the cell its shape and acts as tracks for moving vesicles. In the game it tangles intruders; in a real cell its job is support and transport. (Ch. 6)"},
+  kinase:{key:"4", name:"Kinase Cascade", short:"KIN", color:"#ef8a5e", cost:120, dmg:24, rate:1.6, range:120, kind:"splash", splash:55,
+          role:"Amplified blasts hit groups",
+          bio:"A relay of protein kinases inside a signalling pathway. Each kinase switches on many copies of the next one by adding a phosphate group taken from ATP, so one signal is amplified into a huge response. (Ch. 11)"},
+  chloro:{key:"5", name:"Chloroplast", short:"CHL", color:"#6fcf6a", cost:60, dmg:0, rate:0, range:0, kind:"bank", income:10,
+          role:"+10 ATP after every wave",
+          bio:"Captures light energy and uses it to turn CO₂ and water into sugar, releasing O₂ (photosynthesis). The ATP it makes in the light reactions is spent building sugar in the Calvin cycle, so it earns little on its own. (Ch. 10)"},
+  mito:  {key:"6", name:"Mitochondrion", short:"MIT", color:"#e8668a", cost:90, dmg:0, rate:0, range:0, kind:"bank", income:20,
+          role:"+20 ATP after every wave",
+          bio:"Breaks down sugar using oxygen (cellular respiration) and makes most of the cell's ATP on its folded inner membrane. Plant cells have mitochondria as well as chloroplasts. (Ch. 9)"}
+};
+const COMBOS = {
+  energy:{a:"chloro", b:"mito", name:"The energy cycle", effect:"The mitochondrion earns 20 extra ATP each wave.",
+         why:"Cause and effect: photosynthesis in the chloroplast produces sugar and O₂, which are exactly the inputs of cellular respiration in the mitochondrion. Respiration releases CO₂ and water, which the chloroplast uses again. Each organelle's products are the other's raw materials."},
+  traffic:{a:"cyto", b:"vac", name:"Endomembrane delivery", effect:"The vacuole deals 30% more damage.",
+         why:"Cause and effect: motor proteins carry vesicles along cytoskeleton tracks. Vesicles from the Golgi deliver enzymes and materials to the vacuole, which is part of the endomembrane system, so better transport means a better-stocked vacuole."},
+  phos:  {a:"kinase", b:"mito", name:"Kinases run on ATP", effect:"The cascade's blasts are 35% wider and 15% stronger.",
+         why:"Cause and effect: a kinase works by moving a phosphate group from ATP onto the next protein in the pathway, switching it on. A cell with plenty of ATP from its mitochondria can keep its signalling cascades running."}
+};
+const ENEMIES = {
+  radical: {name:"Free radicals", hp:30, speed:68, reward:4, leak:1, r:9, color:"#ffb347"},
+  toxin:   {name:"Toxins", hp:85, speed:50, reward:7, leak:2, r:12, color:"#c86bd9"},
+  virus:   {name:"Virus", hp:230, speed:30, reward:12, leak:3, r:16, color:"#e05a5a"},
+  cyanide: {name:"Cyanide", hp:60, speed:56, reward:6, leak:1, r:10, color:"#5ec8e8", poison:true},
+  boss:    {name:"Rogue Growth Signal", hp:4200, speed:24, reward:0, leak:15, r:24, color:"#ff4d6d", boss:true}
+};
+const WAVES = [
+  [["radical",8]],
+  [["radical",12]],
+  [["radical",8],["toxin",4]],
+  [["toxin",10]],
+  [["radical",10],["toxin",6],["virus",1]],
+  [["toxin",6],["cyanide",4],["virus",3]],
+  [["radical",16],["toxin",6],["cyanide",3]],
+  [["toxin",10],["virus",5]],
+  [["radical",18],["toxin",10],["virus",4],["cyanide",4]],
+  [["toxin",6],["boss",1],["toxin",8]]
+];
+const SAQ_WAVES = {5:"frq1", 10:"frq2"};
+
+// ---------- question bank: Campbell ch. 6–12, written in AP format for practice (not official College Board items) ----------
+const CH = {6:"Ch 6 · Tour of the cell", 7:"Ch 7 · Membranes", 8:"Ch 8 · Enzymes & energy", 9:"Ch 9 · Cellular respiration", 10:"Ch 10 · Photosynthesis", 11:"Ch 11 · Cell communication", 12:"Ch 12 · Cell cycle"};
+const POTATO = {text:"Potato cores of equal size were weighed, soaked in sucrose solutions for 24 hours, and weighed again.",
+  table:{cols:["Sucrose concentration (M)","Change in mass (%)"], rows:[["0.0","+18"],["0.2","+7"],["0.4","−3"],["0.6","−12"],["0.8","−19"]]}};
+const QUESTIONS = [
+ {id:"q1", topic:CH[6], skill:"Calculations",
+  stim:{text:"Students modelled cells as cubes of different sizes.", table:{cols:["Side length (mm)","Surface area (mm²)","Volume (mm³)","Surface area : volume"], rows:[["1","6","1","6 : 1"],["2","24","8","3 : 1"],["4","96","64","1.5 : 1"]]}},
+  q:"Based on the model, which best explains why most cells are very small?",
+  c:["As a cell grows, its volume increases faster than its surface area, so its membrane can't exchange materials fast enough for its needs","Larger cells have more surface area for each unit of volume, so they would lose too much water through their membranes","Smaller cells contain more DNA for each unit of volume, so they can make proteins faster than large cells","A cell's surface area stays the same as it grows, so only its volume limits how big it can get"], a:0,
+  ex:"Doubling the side multiplies surface area by 4 but volume by 8. Everything a cell takes in or gets rid of has to cross its membrane (its surface), while its needs grow with its volume. Expect surface-area-to-volume calculations on the exam."},
+ {id:"q2", topic:CH[6], skill:"Data analysis",
+  stim:{text:"Pancreas cells were given radioactive amino acids for 3 minutes. Researchers then tracked where the radioactive (newly made) proteins were found.", table:{cols:["Time after labelling","Rough ER","Golgi","Secretory vesicles"], rows:[["3 min","80%","10%","2%"],["20 min","25%","60%","10%"],["120 min","5%","15%","75%"]]}},
+  q:"Which path do the data support for a protein that the cell secretes?",
+  c:["Rough ER → Golgi → secretory vesicles → outside the cell","Golgi → rough ER → secretory vesicles → nucleus","Secretory vesicles → Golgi → rough ER → outside the cell","Nucleus → mitochondria → Golgi → outside the cell"], a:0,
+  ex:"The label peaks in the rough ER first, then the Golgi, then the vesicles. Proteins for export are made by ribosomes on the rough ER, modified and shipped by the Golgi, and released when vesicles fuse with the plasma membrane. This is the endomembrane system."},
+ {id:"q3", topic:CH[6], skill:"Argumentation",
+  q:"Mitochondria and chloroplasts have two membranes, their own circular DNA, and ribosomes that resemble bacterial ribosomes. They also divide by splitting in two. Which claim do these observations best support?",
+  c:["They descended from bacteria-like cells that were engulfed by an ancestral cell","They are made by the Golgi apparatus","Mitochondria evolved from chloroplasts","Bacteria evolved from mitochondria that escaped from cells"], a:0,
+  ex:"This is the endosymbiont theory. Each feature looks like a free-living prokaryote: circular DNA, bacterial-type ribosomes, dividing like a bacterium, and an extra membrane left over from being engulfed."},
+ {id:"q4", topic:CH[6], skill:"Argumentation",
+  q:"A student claims that plant cells don't need mitochondria because they have chloroplasts. Which response best evaluates the claim?",
+  c:["It is incorrect: chloroplasts make sugar, but plant cells still need mitochondria to break that sugar down into ATP, including at night and in roots that get no light","It is correct: the light reactions in chloroplasts make all the ATP that every part of a plant needs, day and night","It is correct: mitochondria are found only in animal cells, which cannot make their own food","It is incorrect: plant cells use mitochondria, not chloroplasts, to turn light energy into sugar"], a:0,
+  ex:"Plant cells have both. Photosynthesis stores energy in sugar; cellular respiration releases it as ATP the cell can spend. The ATP from the light reactions stays in the chloroplast to build sugar."},
+ {id:"q5", topic:CH[7], skill:"Data analysis", stim:POTATO,
+  q:"At about what sucrose concentration would the potato cells neither gain nor lose mass?",
+  c:["About 0.35 M","0.0 M","About 0.6 M","0.8 M"], a:0,
+  ex:"The mass change crosses zero between 0.2 M (+7%) and 0.4 M (−3%), a bit closer to 0.4. At that concentration the solution is isotonic to the potato cells, so there is no net movement of water. Reading where data crosses zero is a common exam skill."},
+ {id:"q6", topic:CH[7], skill:"Concept explanation", stim:POTATO,
+  q:"Why did the cores in 0.8 M sucrose lose mass?",
+  c:["The solution was hypertonic to the cells, so water left the cells by osmosis","Sucrose moved into the cells and pushed the water out","The solution was hypotonic, so the cells burst","The cells used active transport to pump water out"], a:0,
+  ex:"Hypertonic means the solution has more solute than the cells. Water moves by osmosis toward the side with more solute, so it leaves the cells and they lose mass."},
+ {id:"q7", topic:CH[7], skill:"Data analysis",
+  stim:{text:"Rate of glucose uptake by red blood cells at different glucose concentrations outside the cell.", chart:{x:[0,2,4,6,8,10], xl:"Glucose outside the cell (mM)", yl:"Uptake rate", series:[{name:"Uptake", y:[0,40,65,78,82,83]}]}},
+  q:"The uptake rate levels off at high glucose concentrations. Which best explains this?",
+  c:["Glucose crosses through a limited number of carrier proteins, and at high concentrations they are all busy (saturated)","Glucose diffuses straight through the phospholipid bilayer, and the bilayer can only hold a fixed amount at once","The cell runs out of the ATP it needs to pump glucose in by osmosis at high concentrations","Glucose stops moving at high concentrations because the concentrations inside and outside become equal"], a:0,
+  ex:"If glucose simply diffused through the bilayer, the rate would keep rising in a straight line. A plateau is the fingerprint of transport proteins: there are only so many, and each can move only so many molecules per second. This is facilitated diffusion."},
+ {id:"q8", topic:CH[7], skill:"Concept explanation",
+  q:"Which substance would cross a pure phospholipid bilayer, with no proteins, most quickly?",
+  c:["Oxygen (O₂)","Glucose","Sodium ions (Na⁺)","A protein"], a:0,
+  ex:"Small, nonpolar molecules like O₂ and CO₂ slip through the oily middle of the bilayer. Ions and large polar molecules like glucose need transport proteins."},
+ {id:"q9", topic:CH[7], skill:"Argumentation",
+  q:"The sodium-potassium pump moves 3 Na⁺ out of a cell and 2 K⁺ in, both against their concentration gradients. If a poison stopped the cell from making ATP, what would most likely happen over time?",
+  c:["The pump would stop, and the Na⁺ and K⁺ concentrations on either side of the membrane would gradually even out","The pump would speed up to make up for the lost ATP, so the gradients would become even steeper","Na⁺ would keep moving out of the cell by osmosis, so the cell would shrink as it lost water","Nothing would change, because the pump works by facilitated diffusion and does not need energy"], a:0,
+  ex:"Moving something against its gradient is active transport, and the pump is powered by ATP. Without ATP the pump stops, and the ions leak back down their gradients until the difference disappears."},
+ {id:"q10", topic:CH[7], skill:"Data analysis",
+  stim:{text:"A Paramecium is a single-celled organism that lives in fresh water. Its contractile vacuole pumps excess water out of the cell.", table:{cols:["Salt concentration of surrounding water (mM)","Contractile vacuole contractions per minute"], rows:[["0","12"],["25","8"],["50","4"],["75","1"]]}},
+  q:"Which best explains the trend in the data?",
+  c:["As the surrounding salt concentration rises, the water is less hypotonic to the cell, so less water enters by osmosis and less needs pumping out","Salt damages the membrane of the contractile vacuole, so it contracts less often as more salt is added","Higher salt makes water enter the cell faster, so the vacuole is overwhelmed and stops keeping up","The Paramecium uses the contractile vacuole to pump salt into the cell, so it needs fewer contractions when salt is plentiful"], a:0,
+  ex:"Fresh water is hypotonic to the cell, so water constantly floods in. Adding salt outside shrinks the difference, less water comes in, and the vacuole has less to bail out."},
+ {id:"q11", topic:CH[8], skill:"Data analysis",
+  stim:{text:"Activity of two digestive enzymes at different pH values.", chart:{x:[1,2,3,4,5,6,7,8,9,10], xl:"pH", yl:"Enzyme activity (% of maximum)", series:[{name:"Pepsin (stomach)", y:[60,100,80,45,15,3,0,0,0,0]},{name:"Trypsin (small intestine)", y:[0,0,0,5,15,35,75,100,80,40]}]}},
+  q:"Which conclusion is best supported by the data?",
+  c:["Each enzyme works best at the pH of the place where it works: pepsin in the acidic stomach and trypsin in the less acidic small intestine","Both enzymes have the same optimum pH, but pepsin is denatured more easily than trypsin","Pepsin is more active than trypsin at every pH, so it is the more important digestive enzyme","pH has little effect on enzyme activity, because both enzymes keep some activity across most of the range"], a:0,
+  ex:"Pepsin peaks near pH 2 and trypsin near pH 8. Away from its optimum, an enzyme's shape (and its active site) changes, so activity drops."},
+ {id:"q12", topic:CH[8], skill:"Visual models",
+  stim:{text:"Reaction rate at different substrate concentrations, with and without inhibitor A.", chart:{x:[0,5,10,15,20,25,30], xl:"Substrate concentration", yl:"Reaction rate", series:[{name:"No inhibitor", y:[0,70,82,87,89,90,90]},{name:"With inhibitor A", y:[0,30,50,63,72,78,82]}]}},
+  q:"Inhibitor A slows the reaction at low substrate concentrations, but at high concentrations the rate approaches the no-inhibitor rate. Inhibitor A is most likely",
+  c:["a competitive inhibitor that competes with the substrate for the active site","a noncompetitive inhibitor that binds away from the active site and changes the enzyme's shape","a cofactor that the enzyme needs before it can bind its substrate at the active site","a substance that permanently denatures some of the enzyme molecules in the solution"], a:0,
+  ex:"A competitive inhibitor can be crowded out: with lots of substrate, the substrate wins most of the active sites. A noncompetitive inhibitor lowers the top rate no matter how much substrate you add."},
+ {id:"q13", topic:CH[8], skill:"Concept explanation",
+  q:"Which statement correctly describes how an enzyme speeds up a reaction?",
+  c:["It lowers the activation energy but does not change the overall energy released or absorbed (ΔG)","It adds energy to the reactants","It makes the reaction release more energy","It is used up as the reaction happens"], a:0,
+  ex:"Enzymes lower the energy hill a reaction has to climb to get started. They don't change the start and end energy levels (ΔG), and they are reused again and again."},
+ {id:"q14", topic:CH[8], skill:"Concept explanation",
+  q:"Building a protein from amino acids requires an input of energy. How do cells usually power reactions like this?",
+  c:["By coupling them to the breakdown of ATP, which releases energy","By heating the cell","By using an enzyme to make the reaction release energy","By using light energy directly in every cell"], a:0,
+  ex:"Energy coupling: an energy-releasing (exergonic) reaction, ATP breaking down to ADP, drives an energy-requiring (endergonic) one. Usually ATP passes a phosphate group to another molecule, which makes it more reactive."},
+ {id:"q15", topic:CH[8], skill:"Experimental design",
+  q:"A student measures how fast catalase from liver breaks down hydrogen peroxide at 10, 25 and 40 °C, with one trial at each temperature. At 25 °C she uses a bigger piece of liver than at the other temperatures. Which change would most improve the experiment?",
+  c:["Use the same amount of liver at every temperature and run several trials at each one","Test only one temperature","Use a different enzyme at each temperature","Measure the colour of the liver instead of the gas produced"], a:0,
+  ex:"Only the independent variable (temperature) should change. Everything else, like the amount of enzyme, must be held constant, and repeated trials show whether the results are reliable."},
+ {id:"q16", topic:CH[9], skill:"Calculations",
+  stim:{text:"Oxygen used by peas in a respirometer at 25 °C.", table:{cols:["Time (min)","0","5","10","15","20"], rows:[["Germinating peas: O₂ used (mL)","0","0.20","0.40","0.61","0.80"],["Dormant peas: O₂ used (mL)","0","0.02","0.03","0.05","0.06"]]}},
+  q:"What was the average rate of oxygen use by the germinating peas over the 20 minutes?",
+  c:["0.04 mL/min","0.4 mL/min","0.8 mL/min","0.003 mL/min"], a:0,
+  ex:"Rate = change ÷ time = 0.80 mL ÷ 20 min = 0.04 mL/min. Germinating seeds are growing fast and need lots of ATP, so they respire much more than dormant seeds."},
+ {id:"q17", topic:CH[9], skill:"Concept explanation",
+  q:"Most of the ATP made from one glucose molecule comes from",
+  c:["ATP synthase in the inner mitochondrial membrane, powered by a flow of H⁺ ions (oxidative phosphorylation)","glycolysis in the cytosol, where glucose is split into two molecules of pyruvate","the citric acid (Krebs) cycle, which makes ATP directly in the mitochondrial matrix","fermentation in the mitochondria, which recycles NADH back into NAD⁺"], a:0,
+  ex:"The electron transport chain pumps H⁺ across the inner membrane. As H⁺ flows back through ATP synthase, the enzyme spins and makes ATP. That produces about 26–28 of the roughly 30–32 ATP per glucose."},
+ {id:"q18", topic:CH[9], skill:"Argumentation",
+  q:"Cyanide blocks the last step of the electron transport chain, so electrons can no longer be passed to oxygen. Which is the most direct effect?",
+  c:["H⁺ stops being pumped across the inner mitochondrial membrane, so ATP synthase makes little or no ATP","Glycolysis stops immediately, because every step of glycolysis needs oxygen to accept electrons","The cell switches to making ATP by photosynthesis in its mitochondria instead","Oxygen use by the mitochondria increases as the cell tries to keep the chain running"], a:0,
+  ex:"If the chain is jammed, electrons stop flowing, H⁺ stops being pumped, and the gradient that drives ATP synthase disappears. Glycolysis doesn't need oxygen, which is why cyanide waves in the game leave you only your basic income."},
+ {id:"q19", topic:CH[9], skill:"Concept explanation",
+  q:"When oxygen is not available, yeast and muscle cells carry out fermentation. The main purpose of fermentation is to",
+  c:["recycle NAD⁺ so glycolysis can keep making a small amount of ATP","make large amounts of ATP","produce oxygen","make glucose"], a:0,
+  ex:"Glycolysis needs NAD⁺ to keep running. Fermentation hands electrons from NADH to pyruvate (making lactate or alcohol), freeing NAD⁺ so glycolysis can keep producing its 2 ATP."},
+ {id:"q20", topic:CH[10], skill:"Data analysis",
+  stim:{text:"Oxygen bubbles released by an aquatic plant at different light intensities.", chart:{x:[0,200,400,600,800,1000], xl:"Light intensity (units)", yl:"O₂ bubbles per minute", series:[{name:"O₂ production", y:[0,8,15,20,21,21]}]}},
+  q:"Above about 600 units of light, the rate stops increasing. Which is the most likely explanation?",
+  c:["Something other than light, such as the CO₂ supply, now limits the rate of photosynthesis","The plant has stopped photosynthesizing because its stomata close at high light levels","Bright light destroys chlorophyll, so the plant cannot absorb any more of it","The plant has switched to cellular respiration, which uses up all the oxygen it makes"], a:0,
+  ex:"At low light, light is the limiting factor. Once there is plenty, the rate is held back by something else: CO₂, temperature, or how fast the Calvin cycle enzymes (like rubisco) can work."},
+ {id:"q21", topic:CH[10], skill:"Visual models",
+  stim:{text:"Light absorbed by chlorophyll a at different colours of light.", table:{cols:["Colour (wavelength)","Light absorbed (%)"], rows:[["Violet-blue (430 nm)","90"],["Blue-green (480 nm)","30"],["Green (530 nm)","5"],["Yellow (580 nm)","8"],["Orange (620 nm)","25"],["Red (660 nm)","80"]]}},
+  q:"Plants are given equal amounts of light, one colour at a time. Under which colour would photosynthesis most likely be slowest?",
+  c:["Green","Violet-blue","Red","All colours would give the same rate"], a:0,
+  ex:"Light can only drive photosynthesis if it is absorbed. Chlorophyll reflects most green light, which is why leaves look green. Other pigments absorb a little green, so the rate is low but not zero."},
+ {id:"q22", topic:CH[10], skill:"Argumentation",
+  q:"A herbicide blocks the light reactions in chloroplasts. Shortly afterwards, the Calvin cycle also stops. Why?",
+  c:["The Calvin cycle needs the ATP and NADPH made by the light reactions","The Calvin cycle needs the oxygen released by the light reactions to fix carbon","The Calvin cycle can only run in darkness, and the herbicide makes the chloroplast act as if it is in light","The herbicide removes the CO₂ from the leaf, which the light reactions normally supply"], a:0,
+  ex:"The two stages are linked: the light reactions charge up ATP and NADPH, and the Calvin cycle spends them to turn CO₂ into sugar. No light reactions, no fuel for the Calvin cycle."},
+ {id:"q23", topic:CH[10], skill:"Experimental design",
+  q:"Scientists gave algae water containing a heavy form of oxygen (¹⁸O), while the CO₂ contained normal oxygen. The O₂ the algae released contained the heavy oxygen. What does this show?",
+  c:["The O₂ released in photosynthesis comes from water, which is split in the light reactions","The O₂ released in photosynthesis comes from CO₂","The O₂ released comes from glucose","Algae absorb O₂ from water and release it unchanged"], a:0,
+  ex:"Labelling one ingredient and tracking where the label ends up is a classic experimental design. The label followed the water, so water is the source of the oxygen gas."},
+ {id:"q24", topic:CH[11], skill:"Argumentation",
+  stim:{text:"Experiments on liver cells and the hormone epinephrine (adrenaline).", table:{cols:["Treatment","Glycogen broken down to glucose?"], rows:[["Epinephrine added outside intact cells","Yes"],["Epinephrine injected into the cytoplasm","No"],["Cells broken open; cAMP added to the cell contents","Yes"]]}},
+  q:"Which conclusion do these results best support?",
+  c:["Epinephrine binds a receptor on the cell surface, which produces a second messenger (cAMP) inside the cell","Epinephrine must enter the cytoplasm to work, and the injection simply used too little of it","cAMP blocks glycogen breakdown unless epinephrine is also present outside the cell","Epinephrine works by entering the nucleus and switching on genes for glycogen breakdown"], a:0,
+  ex:"Epinephrine only works from outside, so its receptor is on the surface. cAMP alone triggers the response inside, so it relays the message: it is a second messenger. This is reception, then transduction, then response."},
+ {id:"q25", topic:CH[11], skill:"Concept explanation",
+  q:"One epinephrine molecule binding to a liver cell can lead to the release of millions of glucose molecules. This is mainly because",
+  c:["each activated protein in the pathway, such as a protein kinase, activates many copies of the next one","each epinephrine molecule is broken down and converted into many glucose molecules","the receptor protein splits into millions of pieces that each act on glycogen","glucose released by the cell acts as its own signal and triggers more release"], a:0,
+  ex:"Amplification: at every step of the cascade, one active molecule switches on many of the next. That is why the Kinase Cascade tower hits whole groups."},
+ {id:"q26", topic:CH[11], skill:"Argumentation",
+  q:"Ras is a protein that relays a 'divide' signal from growth-factor receptors. A mutation leaves Ras permanently switched on, even when no growth factor is present. What is the most likely result?",
+  c:["The cell keeps receiving a signal to divide and may divide uncontrollably, as in cancer","The cell stops dividing, because Ras can only send its signal when it is switched off","The cell can no longer respond to any signal, because the receptor is blocked","The cell dies immediately, because the signalling pathway is overloaded"], a:0,
+  ex:"A relay protein stuck in the 'on' position sends the message whether or not the real signal arrived. Mutations like this are found in many cancers, and it is what the boss of this level represents."},
+ {id:"q27", topic:CH[12], skill:"Calculations",
+  stim:{text:"Cells in each stage of the cell cycle, counted in an onion root tip (100 cells).", table:{cols:["Stage","Number of cells"], rows:[["Interphase","85"],["Prophase","8"],["Metaphase","3"],["Anaphase","2"],["Telophase","2"]]}},
+  q:"If one complete cell cycle in these cells takes 24 hours, about how long does prophase last?",
+  c:["About 1.9 hours","About 8 hours","About 20 hours","About 0.3 hours"], a:0,
+  ex:"The share of cells in a stage tells you the share of time spent there. 8 out of 100 cells is 8%, and 8% of 24 hours = 1.92 hours."},
+ {id:"q28", topic:CH[12], skill:"Data analysis",
+  stim:{text:"Cells were sorted by how much DNA they contained. A cell in G1 has 2 units of DNA.", table:{cols:["DNA per cell","Untreated cells","Cells treated with drug Y"], rows:[["2 units","60%","10%"],["Between 2 and 4 units","15%","10%"],["4 units","25%","80%"]]}},
+  q:"Drug Y most likely stops cells at which point in the cell cycle?",
+  c:["After DNA has been copied, in G2 or mitosis","In G1, before DNA is copied, so the cells never enter S phase","During S phase, while DNA is being copied, so the cells stop halfway","It makes cells copy their DNA twice, so each cell ends up with 8 units"], a:0,
+  ex:"Cells with 4 units have finished copying their DNA (S phase) but haven't divided yet. With 80% of treated cells piling up at 4 units, they are stuck in G2 or mitosis."},
+ {id:"q29", topic:CH[12], skill:"Visual models",
+  stim:{text:"Amounts of two proteins in a dividing cell over two cell cycles (M = mitosis).", chart:{x:["G1","S","G2","M","G1","S","G2","M","G1"], xl:"Stage of the cell cycle", yl:"Relative amount", series:[{name:"Cyclin", y:[10,40,75,100,10,40,75,100,10]},{name:"Cdk", y:[60,60,60,60,60,60,60,60,60]}]}},
+  q:"Which statement is best supported by the graph?",
+  c:["Cyclin builds up during interphase and is destroyed after mitosis, while the amount of Cdk stays about the same","Cdk rises and falls with each cycle, while the amount of cyclin stays about the same","Cyclin is highest during G1 and is destroyed as the cell copies its DNA","Both proteins build up during interphase and are destroyed during S phase"], a:0,
+  ex:"Cdk is always present but only active when attached to cyclin. As cyclin builds up, more Cdk is switched on (forming MPF), which pushes the cell into mitosis. Cyclin is then broken down, resetting the cycle."},
+ {id:"q30", topic:CH[12], skill:"Concept explanation",
+  q:"Normal cells in a dish stop dividing when they touch each other and form a single layer. Cancer cells keep dividing and pile up. Cancer cells have most likely lost",
+  c:["density-dependent inhibition, one of the normal brakes on the cell cycle","the ability to copy their DNA, so they divide without replicating","their mitochondria, so they cannot sense the cells around them","the ability to undergo mitosis, so they divide by a different process"], a:0,
+  ex:"Crowded normal cells stop dividing (density-dependent inhibition), and most need to be anchored to divide (anchorage dependence). Cancer cells ignore both signals."}
+];
+const SAQS = {
+ frq1: {title:"Free response: catalase and temperature", reward:"+50 ATP per point",
+  stim:{text:"A student added the same amount of catalase (an enzyme from liver) to hydrogen peroxide at six temperatures and measured how fast oxygen gas was produced.", table:{cols:["Temperature (°C)","10","20","30","40","50","60"], rows:[["O₂ produced (mL/min)","1.2","2.5","4.1","5.0","2.2","0.3"]]}},
+  parts:[
+   {p:"a", q:"Identify the independent variable and the dependent variable in this experiment.",
+    ok:["Independent variable: temperature. Dependent variable: the rate of oxygen production (enzyme activity). Both must be right for the point."]},
+   {p:"b", q:"Explain why the rate of oxygen production decreases above 40 °C.",
+    ok:["High temperature breaks the bonds that hold the enzyme in its 3-D shape, so the enzyme denatures","The active site changes shape, so hydrogen peroxide (the substrate) can no longer fit or bind","Fewer working enzyme molecules means fewer reactions each minute"]},
+   {p:"c", q:"Predict how adding a competitive inhibitor at 40 °C would affect the rate of oxygen production, and justify your prediction.",
+    ok:["The rate would go down, because the inhibitor binds the active site and blocks hydrogen peroxide from binding","The rate would go down, but adding much more hydrogen peroxide could bring it back up, because more substrate outcompetes the inhibitor"]}
+  ]},
+ frq2: {title:"Free response: blocking the spindle", reward:"Weakens the boss by 15% per point, plus 30 ATP per point",
+  stim:{text:"Researchers counted onion root tip cells in each stage of the cell cycle. One group was treated with a chemical that stops microtubules (the spindle fibres) from forming.", table:{cols:["Stage","Untreated cells","Treated cells"], rows:[["Interphase","170","120"],["Prophase","15","20"],["Metaphase","6","58"],["Anaphase","5","1"],["Telophase","4","1"],["Total","200","200"]]}},
+  parts:[
+   {p:"a", q:"Calculate the percentage of untreated cells that were in mitosis (prophase through telophase).",
+    ok:["15% (30 of 200 cells), with the working shown or the correct answer stated"]},
+   {p:"b", q:"Explain why so many treated cells were found in metaphase.",
+    ok:["Without spindle microtubules, the chromosomes can't be attached and pulled apart, so the cells can't move on to anaphase","The M (spindle) checkpoint holds the cell in metaphase until every chromosome is attached to the spindle"]},
+   {p:"c", q:"Cancer cells divide out of control. Explain why a drug that blocks spindle formation could be used to treat cancer.",
+    ok:["Cells that can't form a spindle can't finish mitosis, so tumour cells stop dividing","Cancer cells divide much more often than most normal cells, so a drug that stops mitosis affects them the most"]}
+  ]}
+};
+
+// ---------- storage ----------
+function load(k, fallback){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : fallback; }catch(e){ return fallback; } }
+function store(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+function drop(k){ try{ localStorage.removeItem(k); }catch(e){} }
+function freshSave(){ return {version:1, game:"cell-defense", levels:{}, q:{}, qCount:0, saq:[], combos:[], runs:0, created:Date.now()}; }
+let SAVE = Object.assign(freshSave(), load(SAVE_KEY, {}));
+function persist(){ store(SAVE_KEY, SAVE); }
+function getKey(){ try{ return localStorage.getItem(KEY_KEY) || ""; }catch(e){ return ""; } }
+
+// ---------- path geometry ----------
+const SEGS = []; let PATH_LEN = 0;
+for(let i=0;i<PATH.length-1;i++){ const a=PATH[i], b=PATH[i+1], len=Math.hypot(b.x-a.x,b.y-a.y); SEGS.push({a,b,len,start:PATH_LEN}); PATH_LEN+=len; }
+function pointAt(d){ for(const s of SEGS){ if(d <= s.start + s.len){ const t=(d-s.start)/s.len; return {x:s.a.x+(s.b.x-s.a.x)*t, y:s.a.y+(s.b.y-s.a.y)*t}; } } const l=PATH[PATH.length-1]; return {x:l.x,y:l.y}; }
+const PATH_TILES = new Set();
+for(let d=0; d<=PATH_LEN; d+=8){ const p=pointAt(d); const c=Math.floor(p.x/T), r=Math.floor(p.y/T); if(c>=0&&c<COLS&&r>=0&&r<ROWS) PATH_TILES.add(c+","+r); }
+// the nucleus is not buildable
+for(let c=0;c<COLS;c++) for(let r=0;r<ROWS;r++){ const x=c*T+T/2, y=r*T+T/2; if(((x-NUC.x)/NUC.rx)**2+((y-NUC.y)/NUC.ry)**2 < 1.05) PATH_TILES.add(c+","+r); }
+
+// ---------- run state ----------
+let S;
+function newRun(){
+  S = {wave:0, gold:200, trade:20, towers:[], enemies:[], fx:[], queue:[], spawnT:0, running:false, studyLeft:2,
+       runRight:0, runAsked:0, bossMult:1, speed:1, recent:[], nextId:1, poisoned:0};
+  SAVE.runs++; persist();
+  drop(SNAP_KEY);
+  selected = null; placing = null;
+  computeSynergy(false); renderShop(); renderSel(); updateHUD();
+}
+function snapshot(){
+  store(SNAP_KEY, {level:LEVEL_ID, wave:S.wave, gold:S.gold, trade:S.trade, runRight:S.runRight, runAsked:S.runAsked,
+    towers:S.towers.map(t=>({type:t.type,c:t.c,r:t.r,level:t.level,spent:t.spent})), saved:Date.now()});
+}
+function restore(sn){
+  newRun(); SAVE.runs--; persist();
+  Object.assign(S, {wave:sn.wave, gold:sn.gold, trade:sn.trade, runRight:sn.runRight||0, runAsked:sn.runAsked||0});
+  S.towers = sn.towers.map(t => ({...t, id:S.nextId++, cd:0, aim:0}));
+  store(SNAP_KEY, sn);
+  computeSynergy(false); renderShop(); renderSel(); updateHUD();
+}
+
+// ---------- towers ----------
+function towerAt(c,r){ return S.towers.find(t=>t.c===c&&t.r===r); }
+function stats(t){
+  const b = TOWERS[t.type], lv = [1,1.55,2.2][t.level-1];
+  let dmg=b.dmg*lv, range=b.range*(1+0.1*(t.level-1)), splash=b.splash||0, slow=b.slow?Math.min(0.65,b.slow+0.08*(t.level-1)):0, income=(b.income||0)*(1+0.5*(t.level-1));
+  if(t.syn.has("traffic") && t.type==="vac") dmg*=1.3;
+  if(t.syn.has("phos") && t.type==="kinase"){ splash*=1.35; dmg*=1.15; }
+  if(t.syn.has("energy") && t.type==="mito") income+=20;
+  return {dmg, range, splash, slow, income, rate:b.rate};
+}
+function computeSynergy(announce=true){
+  for(const t of S.towers) t.syn = new Set();
+  for(let i=0;i<S.towers.length;i++) for(let j=i+1;j<S.towers.length;j++){
+    const a=S.towers[i], b=S.towers[j];
+    if(Math.abs(a.c-b.c)>1 || Math.abs(a.r-b.r)>1) continue;
+    for(const [id,cb] of Object.entries(COMBOS)){
+      if((a.type===cb.a&&b.type===cb.b)||(a.type===cb.b&&b.type===cb.a)){
+        a.syn.add(id); b.syn.add(id);
+        if(announce && !SAVE.combos.includes(id)){ SAVE.combos.push(id); persist(); discover(id); }
+      }
+    }
+  }
+}
+function upgradeCost(t){ return Math.round(TOWERS[t.type].cost*0.8*t.level); }
+
+// ---------- canvas ----------
+const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+const bg = document.createElement("canvas"); bg.width=W; bg.height=H;
+function paintBg(){
+  const g = bg.getContext("2d"); g.clearRect(0,0,W,H);
+  const grd = g.createRadialGradient(W*0.55,H*0.5,40,W*0.55,H*0.5,W*0.7); grd.addColorStop(0,"#13302f"); grd.addColorStop(1,"#0a1a1b");
+  g.fillStyle=grd; g.fillRect(0,0,W,H);
+  let seed=11; const rnd=()=>{ seed=(seed*16807)%2147483647; return seed/2147483647; };
+  // cytosol speckles (ribosomes)
+  for(let i=0;i<700;i++){ g.fillStyle=`rgba(150,220,190,${0.03+rnd()*0.06})`; g.beginPath(); g.arc(rnd()*W, rnd()*H, 0.8+rnd()*1.4, 0, Math.PI*2); g.fill(); }
+  // background organelles: ER folds, Golgi stacks, vesicles
+  g.lineCap="round";
+  g.strokeStyle="rgba(120,200,170,0.08)"; g.lineWidth=3;
+  for(let i=0;i<6;i++){ const x=3*T+rnd()*15*T, y=rnd()*H; g.beginPath(); g.moveTo(x,y); for(let k=1;k<6;k++) g.quadraticCurveTo(x+k*14-7, y+(k%2?14:-14), x+k*14, y); g.stroke(); }
+  g.strokeStyle="rgba(240,200,120,0.08)"; g.lineWidth=4;
+  for(let i=0;i<3;i++){ const x=4*T+rnd()*13*T, y=rnd()*H; for(let k=0;k<4;k++){ g.beginPath(); g.arc(x, y+k*8, 26-k*3, Math.PI*1.15, Math.PI*1.85); g.stroke(); } }
+  for(let i=0;i<18;i++){ g.strokeStyle="rgba(180,160,240,0.10)"; g.lineWidth=1.5; g.beginPath(); g.arc(rnd()*W, rnd()*H, 3+rnd()*5, 0, Math.PI*2); g.stroke(); }
+  // grid
+  g.strokeStyle="rgba(255,255,255,0.022)"; g.lineWidth=1;
+  for(let c=0;c<=COLS;c++){ g.beginPath(); g.moveTo(c*T,0); g.lineTo(c*T,H); g.stroke(); }
+  for(let r=0;r<=ROWS;r++){ g.beginPath(); g.moveTo(0,r*T); g.lineTo(W,r*T); g.stroke(); }
+  // cell wall and plasma membrane round the edge
+  g.strokeStyle="#2f6b3f"; g.lineWidth=12; g.strokeRect(6,6,W-12,H-12);
+  g.strokeStyle="rgba(120,214,160,0.55)"; g.lineWidth=2; g.strokeRect(15,15,W-30,H-30);
+  // nucleus
+  g.save();
+  g.fillStyle="rgba(70,60,120,0.55)"; g.beginPath(); g.ellipse(NUC.x,NUC.y,NUC.rx,NUC.ry,0,0,Math.PI*2); g.fill();
+  g.strokeStyle="rgba(190,170,255,0.75)"; g.lineWidth=3; g.stroke();
+  g.strokeStyle="rgba(190,170,255,0.35)"; g.lineWidth=1.5; g.beginPath(); g.ellipse(NUC.x,NUC.y,NUC.rx-6,NUC.ry-6,0,0,Math.PI*2); g.stroke();
+  g.strokeStyle="rgba(255,140,190,0.45)"; g.lineWidth=2;
+  for(let k=0;k<5;k++){ g.beginPath(); const y0=NUC.y-60+k*28; g.moveTo(8,y0); for(let x=8;x<NUC.x+NUC.rx-24;x+=6) g.lineTo(x, y0+Math.sin(x/5+k)*5); g.stroke(); }
+  g.restore();
+  // the route threats take through the cytosol
+  g.lineCap="round"; g.lineJoin="round";
+  const road = (w,col)=>{ g.strokeStyle=col; g.lineWidth=w; g.beginPath(); g.moveTo(PATH[0].x,PATH[0].y); for(const p of PATH) g.lineTo(p.x,p.y); g.stroke(); };
+  road(40,"#1e4a45"); road(32,"#2d6a62"); road(2,"rgba(200,255,235,0.18)");
+  g.setLineDash([2,10]); road(3,"rgba(10,30,28,0.6)"); g.setLineDash([]);
+  // breach in the wall
+  g.fillStyle="#0a1a1b"; g.fillRect(W-20, PATH[0].y-22, 20, 44);
+  // labels
+  for(const c of LABELS){
+    const x=c.x*T, y=c.y*T;
+    g.font="600 15px 'Bricolage Grotesque', system-ui, sans-serif"; g.fillStyle="rgba(232,241,236,0.9)"; g.textAlign="center"; g.fillText(c.n, x, y);
+    if(c.sub){ g.font="11px Figtree, sans-serif"; g.fillStyle="rgba(157,183,179,0.95)"; g.fillText(c.sub, x, y+14); }
+  }
+  g.textAlign="left"; g.font="12px Figtree, sans-serif"; g.fillStyle="rgba(157,183,179,0.75)";
+  g.fillText("Threats break through the membrane and head for the nucleus. Every one that gets there costs Health.", 26, H-22);
+}
+paintBg();
+if(document.fonts){ document.fonts.ready.then(paintBg).catch(()=>{}); }
+
+let hover = null, placing = null, selected = null;
+function canvasPos(e){ const r=cv.getBoundingClientRect(); return {x:(e.clientX-r.left)*W/r.width, y:(e.clientY-r.top)*H/r.height}; }
+cv.addEventListener("mousemove", e=>{ const p=canvasPos(e); hover={c:Math.floor(p.x/T), r:Math.floor(p.y/T)}; });
+cv.addEventListener("mouseleave", ()=>{ hover=null; });
+cv.addEventListener("contextmenu", e=>{ e.preventDefault(); placing=null; renderShop(); });
+cv.addEventListener("click", e=>{
+  const p=canvasPos(e), c=Math.floor(p.x/T), r=Math.floor(p.y/T);
+  hover={c,r};
+  const existing = towerAt(c,r);
+  if(placing){
+    const b=TOWERS[placing];
+    if(existing || PATH_TILES.has(c+","+r)){ toast("You can't build on the route, in the nucleus, or on another organelle."); return; }
+    if(S.gold < b.cost){ toast("Not enough ATP. Answer a study question to earn more."); return; }
+    S.gold -= b.cost;
+    const t = {id:S.nextId++, type:placing, c, r, level:1, spent:b.cost, cd:0, aim:0, syn:new Set()};
+    S.towers.push(t); computeSynergy(true);
+    if(S.gold < b.cost) placing = null;
+    selected = null; renderShop(); renderSel(); updateHUD();
+    return;
+  }
+  selected = existing ? existing.id : null; renderSel();
+});
+
+function drawTowerIcon(t, x, y){
+  const b=TOWERS[t.type], cx=x+T/2, cy=y+T/2;
+  ctx.fillStyle="rgba(0,0,0,0.35)"; roundRect(x+6,y+9,T-10,T-10,12); ctx.fill();
+  ctx.fillStyle=b.color;
+  if(t.type==="mito"||t.type==="chloro"){ ctx.beginPath(); ctx.ellipse(cx,cy,T/2-5,T/2-12,0,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle="rgba(0,0,0,0.35)"; ctx.lineWidth=2; ctx.beginPath();
+    if(t.type==="mito"){ ctx.moveTo(cx-14,cy); for(let k=0;k<6;k++) ctx.lineTo(cx-14+k*5+2.5, cy+(k%2?-6:6)); ctx.lineTo(cx+14,cy); }
+    else { for(let k=-1;k<=1;k++){ ctx.moveTo(cx+k*9-4,cy-5); ctx.lineTo(cx+k*9-4,cy+5); ctx.moveTo(cx+k*9+1,cy-5); ctx.lineTo(cx+k*9+1,cy+5); } }
+    ctx.stroke();
+  } else { ctx.beginPath(); ctx.arc(cx,cy,T/2-5,0,Math.PI*2); ctx.fill(); }
+  if(t.id===selected){ ctx.strokeStyle="#fff"; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(cx,cy,T/2-2,0,Math.PI*2); ctx.stroke(); }
+  if(!(t.type==="mito"||t.type==="chloro")){ ctx.fillStyle="#06150f"; ctx.font="bold 12px Figtree, sans-serif"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText(b.short, cx, cy-2); }
+  for(let i=0;i<t.level;i++){ ctx.fillStyle=(t.type==="mito"||t.type==="chloro")?"#fff":"#06150f"; ctx.beginPath(); ctx.arc(cx-8+i*8, y+T-9, 2.4, 0, Math.PI*2); ctx.fill(); }
+}
+function draw(){
+  ctx.drawImage(bg,0,0);
+  // synergy links
+  for(let i=0;i<S.towers.length;i++) for(let j=i+1;j<S.towers.length;j++){
+    const a=S.towers[i], b=S.towers[j];
+    if(Math.abs(a.c-b.c)>1||Math.abs(a.r-b.r)>1) continue;
+    const shared=[...a.syn].some(s=>b.syn.has(s)&&(COMBOS[s].a===a.type||COMBOS[s].b===a.type)&&(COMBOS[s].a===b.type||COMBOS[s].b===b.type)&&a.type!==b.type);
+    if(!shared) continue;
+    ctx.strokeStyle="rgba(95,211,166,0.85)"; ctx.lineWidth=3; ctx.setLineDash([5,4]);
+    ctx.beginPath(); ctx.moveTo(a.c*T+T/2,a.r*T+T/2); ctx.lineTo(b.c*T+T/2,b.r*T+T/2); ctx.stroke(); ctx.setLineDash([]);
+  }
+  const sel = S.towers.find(t=>t.id===selected);
+  if(sel){ const st=stats(sel); if(st.range){ ctx.fillStyle="rgba(95,211,166,0.10)"; ctx.strokeStyle="rgba(95,211,166,0.6)"; ctx.beginPath(); ctx.arc(sel.c*T+T/2, sel.r*T+T/2, st.range, 0, Math.PI*2); ctx.fill(); ctx.stroke(); } }
+  for(const t of S.towers){
+    drawTowerIcon(t, t.c*T, t.r*T);
+    if(TOWERS[t.type].kind==="slow"){ const st=stats(t); ctx.strokeStyle="rgba(185,166,242,0.2)"; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(t.c*T+T/2,t.r*T+T/2,st.range,0,Math.PI*2); ctx.stroke(); }
+  }
+  ctx.textBaseline="alphabetic"; ctx.textAlign="left";
+  if(placing && hover){
+    const b=TOWERS[placing], ok=!towerAt(hover.c,hover.r)&&!PATH_TILES.has(hover.c+","+hover.r)&&S.gold>=b.cost;
+    const x=hover.c*T, y=hover.r*T;
+    ctx.globalAlpha=0.55; ctx.fillStyle=ok?b.color:"#ef6f5e"; ctx.beginPath(); ctx.arc(x+T/2,y+T/2,T/2-5,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1;
+    if(b.range){ ctx.strokeStyle=ok?"rgba(232,241,236,0.5)":"rgba(239,111,94,0.6)"; ctx.setLineDash([4,4]); ctx.beginPath(); ctx.arc(x+T/2,y+T/2,b.range,0,Math.PI*2); ctx.stroke(); ctx.setLineDash([]); }
+  }
+  // enemies
+  const now=performance.now();
+  for(const e of S.enemies){
+    const d=ENEMIES[e.type], p=pointAt(e.d);
+    if(d.boss){
+      const pulse = 1+0.08*Math.sin(now/180);
+      const g=ctx.createRadialGradient(p.x,p.y,2,p.x,p.y,d.r*1.8*pulse); g.addColorStop(0,"rgba(120,10,30,0.95)"); g.addColorStop(0.6,"rgba(255,77,109,0.65)"); g.addColorStop(1,"rgba(255,77,109,0)");
+      ctx.fillStyle=g; ctx.beginPath(); ctx.arc(p.x,p.y,d.r*1.8*pulse,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle="#ff8fa3"; ctx.lineWidth=3;
+      for(let k=0;k<10;k++){ const a=k*Math.PI/5+now/900; ctx.beginPath(); ctx.moveTo(p.x+Math.cos(a)*d.r,p.y+Math.sin(a)*d.r); ctx.lineTo(p.x+Math.cos(a)*(d.r+9),p.y+Math.sin(a)*(d.r+9)); ctx.stroke(); }
+      ctx.fillStyle="#e8f1ec"; ctx.font="12px Figtree, sans-serif"; ctx.textAlign="center"; ctx.fillText("Rogue Growth Signal", p.x, p.y-d.r-16); ctx.textAlign="left";
+    } else if(e.type==="virus"){
+      ctx.fillStyle=d.color; ctx.beginPath();
+      for(let k=0;k<6;k++){ const a=k*Math.PI/3+now/1200; const px=p.x+Math.cos(a)*d.r, py=p.y+Math.sin(a)*d.r; k?ctx.lineTo(px,py):ctx.moveTo(px,py); } ctx.closePath(); ctx.fill();
+      ctx.strokeStyle=d.color; ctx.lineWidth=2;
+      for(let k=0;k<6;k++){ const a=k*Math.PI/3+now/1200+Math.PI/6; ctx.beginPath(); ctx.moveTo(p.x+Math.cos(a)*d.r*0.9,p.y+Math.sin(a)*d.r*0.9); ctx.lineTo(p.x+Math.cos(a)*(d.r+6),p.y+Math.sin(a)*(d.r+6)); ctx.stroke(); }
+    } else if(e.type==="toxin"){
+      ctx.fillStyle=d.color; ctx.beginPath(); ctx.moveTo(p.x,p.y-d.r); ctx.lineTo(p.x+d.r,p.y); ctx.lineTo(p.x,p.y+d.r); ctx.lineTo(p.x-d.r,p.y); ctx.closePath(); ctx.fill();
+    } else if(e.type==="cyanide"){
+      ctx.fillStyle=d.color; ctx.beginPath(); ctx.arc(p.x,p.y,d.r,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle="#04202a"; ctx.font="bold 9px Figtree, sans-serif"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("CN", p.x, p.y+0.5); ctx.textAlign="left"; ctx.textBaseline="alphabetic";
+    } else {
+      ctx.fillStyle=d.color; ctx.beginPath();
+      for(let k=0;k<10;k++){ const a=k*Math.PI/5+now/300, rr=k%2?d.r*0.45:d.r; const px=p.x+Math.cos(a)*rr, py=p.y+Math.sin(a)*rr; k?ctx.lineTo(px,py):ctx.moveTo(px,py); } ctx.closePath(); ctx.fill();
+    }
+    if(e.slowed){ ctx.strokeStyle="rgba(185,166,242,0.9)"; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(p.x,p.y,d.r+4,0,Math.PI*2); ctx.stroke(); }
+    const w = d.boss?60:26, f=Math.max(0,e.hp/e.max);
+    ctx.fillStyle="rgba(0,0,0,0.6)"; ctx.fillRect(p.x-w/2,p.y-d.r-9,w,4);
+    ctx.fillStyle=f>0.5?"#7bd88f":f>0.25?"#f2c94c":"#ef6f5e"; ctx.fillRect(p.x-w/2,p.y-d.r-9,w*f,4);
+  }
+  for(const f of S.fx){
+    const a=Math.max(0,f.t/f.life);
+    if(f.kind==="shot"){ ctx.strokeStyle=`rgba(230,255,240,${a})`; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(f.x1,f.y1); ctx.lineTo(f.x2,f.y2); ctx.stroke(); }
+    else if(f.kind==="boom"){ ctx.fillStyle=`rgba(239,138,94,${a*0.45})`; ctx.beginPath(); ctx.arc(f.x,f.y,f.r*(1.2-a*0.4),0,Math.PI*2); ctx.fill(); }
+    else if(f.kind==="coin"){ ctx.fillStyle=`rgba(242,201,76,${a})`; ctx.font="bold 13px Figtree, sans-serif"; ctx.fillText(f.txt, f.x, f.y-(1-a)*18); }
+  }
+}
+function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+// ---------- simulation ----------
+function update(dt){
+  if(!S.running) return;
+  S.spawnT -= dt;
+  if(S.queue.length && S.spawnT<=0){
+    const type=S.queue.shift(), d=ENEMIES[type];
+    const scale = d.boss ? S.bossMult : (1 + 0.13*(S.wave));
+    const hp = Math.round(d.hp*scale);
+    S.enemies.push({type, d:0, hp, max:hp, slowed:false});
+    S.spawnT = d.boss ? 3 : (type==="virus" ? 1.6 : type==="toxin" ? 0.85 : 0.6);
+  }
+  const slows = S.towers.filter(t=>TOWERS[t.type].kind==="slow").map(t=>({t, st:stats(t)}));
+  for(const e of S.enemies){
+    const p=pointAt(e.d); let f=1; e.slowed=false;
+    for(const s of slows){ if(Math.hypot(p.x-(s.t.c*T+T/2), p.y-(s.t.r*T+T/2)) <= s.st.range){ f=Math.min(f, 1-s.st.slow*(ENEMIES[e.type].boss?0.5:1)); e.slowed=true; } }
+    e.d += ENEMIES[e.type].speed*f*dt;
+  }
+  for(const e of S.enemies){ if(e.d>=PATH_LEN && e.hp>0){ const d=ENEMIES[e.type]; e.hp=0; e.leaked=true; S.trade-=d.leak;
+    if(d.poison){ S.poisoned++; toast("Cyanide got through: mitochondria will make no ATP this wave"); }
+    else toast(`${d.name} reached the nucleus: −${d.leak} Health`); } }
+  for(const t of S.towers){
+    const b=TOWERS[t.type]; if(b.kind==="slow"||b.kind==="bank") continue;
+    t.cd -= dt; if(t.cd>0) continue;
+    const st=stats(t), tx=t.c*T+T/2, ty=t.r*T+T/2;
+    let best=null;
+    for(const e of S.enemies){ if(e.hp<=0) continue; const p=pointAt(e.d); if(Math.hypot(p.x-tx,p.y-ty)<=st.range && (!best||e.d>best.d)) best=e; }
+    if(!best) continue;
+    t.cd = st.rate;
+    const p=pointAt(best.d);
+    if(b.kind==="splash"){
+      for(const e of S.enemies){ if(e.hp<=0) continue; const q=pointAt(e.d); if(Math.hypot(q.x-p.x,q.y-p.y)<=st.splash) hit(e, st.dmg); }
+      S.fx.push({kind:"boom",x:p.x,y:p.y,r:st.splash,t:0.35,life:0.35});
+      S.fx.push({kind:"shot",x1:tx,y1:ty,x2:p.x,y2:p.y,t:0.12,life:0.12});
+    } else {
+      hit(best, st.dmg);
+      S.fx.push({kind:"shot",x1:tx,y1:ty,x2:p.x,y2:p.y,t:0.09,life:0.09});
+    }
+  }
+  S.enemies = S.enemies.filter(e=>e.hp>0);
+  for(const f of S.fx) f.t-=dt; S.fx=S.fx.filter(f=>f.t>0);
+  if(S.trade<=0){ S.trade=0; S.running=false; updateHUD(); gameOver(); return; }
+  if(!S.queue.length && !S.enemies.length) endWave();
+  updateHUD();
+}
+function hit(e,dmg){
+  if(e.hp<=0) return;
+  e.hp-=dmg;
+  if(e.hp<=0){ const d=ENEMIES[e.type]; if(d.reward){ S.gold+=d.reward; const p=pointAt(e.d); S.fx.push({kind:"coin",txt:"+"+d.reward,x:p.x,y:p.y,t:0.8,life:0.8}); } }
+}
+function beginWave(){
+  const n=S.wave+1; S.queue=[]; S.poisoned=0;
+  for(const [type,count] of WAVES[n-1]) for(let i=0;i<count;i++) S.queue.push(type);
+  S.spawnT=0.4; S.running=true; selected=null; renderSel(); updateHUD();
+  const hasCN = WAVES[n-1].some(([t])=>t==="cyanide");
+  setHint(n===10 ? "The Rogue Growth Signal is heading for the nucleus. Stop it before the cell divides out of control!" : hasCN ? `Wave ${n}: cyanide incoming (blue). If any gets through, your mitochondria make no ATP this wave.` : `Wave ${n} is inside the cell.`);
+}
+function endWave(){
+  S.running=false; S.wave++;
+  let income=25, mitoIncome=0;
+  for(const t of S.towers){ if(t.type==="chloro") income+=Math.round(stats(t).income); if(t.type==="mito") mitoIncome+=Math.round(stats(t).income); }
+  const blocked = S.poisoned>0 && mitoIncome>0;
+  if(!S.poisoned) income+=mitoIncome;
+  S.gold+=income; S.studyLeft=2;
+  if(S.wave>=10){ updateHUD(); victory(); return; }
+  snapshot(); updateHUD(); renderShop();
+  toast(blocked ? `Wave ${S.wave} held, but cyanide jammed the electron transport chain. +${income} ATP (mitochondria made none)` : `Wave ${S.wave} held. +${income} ATP`);
+  setHint(SAQ_WAVES[S.wave+1] ? `Next up: a free-response question before wave ${S.wave+1}. Good answers earn big rewards.` : "Build, upgrade, or study for ATP, then start the next wave.");
+}
+
+// ---------- loop ----------
+let last=performance.now();
+function frame(now){
+  let dt=Math.min(0.05,(now-last)/1000); last=now;
+  if(overlay.hidden){ const steps=S.speed; for(let i=0;i<steps;i++) update(dt); }
+  draw(); requestAnimationFrame(frame);
+}
+
+// ---------- HUD ----------
+const $ = id => document.getElementById(id);
+const overlay=$("overlay"), modal=$("modal");
+function updateHUD(){
+  $("gold").textContent=S.gold; $("trade").textContent=S.trade; $("wave").textContent=`${S.wave}/10`;
+  $("tradeBox").classList.toggle("low", S.trade<=6);
+  const sb=$("startBtn");
+  sb.disabled = S.running || S.wave>=10;
+  sb.innerHTML = S.running ? `Wave ${S.wave+1} in progress` : (S.wave>=10 ? "Level complete" : `Start wave ${S.wave+1} <span class="key">Space</span>`);
+  const st=$("studyBtn"); st.disabled = S.running || S.studyLeft<=0 || S.wave>=10;
+  st.textContent = S.studyLeft>0 ? `Study for ATP (+25) · ${S.studyLeft} left` : "Study again after the next wave";
+  updateHUDShop();
+  if(selected) renderSelLight();
+}
+function setHint(t){ $("hint").textContent=t; }
+let toastTimer=null;
+function toast(msg){ const el=$("toast"); el.textContent=msg; el.hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.hidden=true, 2600); }
+function renderShop(){
+  $("shop").innerHTML = Object.entries(TOWERS).map(([id,b])=>`
+    <button data-t="${id}" class="${placing===id?"sel":""}" title="${b.name}">
+      <span class="ico" style="background:${b.color}">${b.short}</span>
+      <span><span class="nm">${b.name}<span class="key">${b.key}</span></span><br><span class="ds">${b.role}</span></span>
+      <span class="cost">${b.cost}</span>
+    </button>`).join("");
+  document.querySelectorAll(".shop button").forEach(btn=>btn.addEventListener("click",()=>{ selectTower(btn.dataset.t); }));
+  updateHUDShop();
+}
+function updateHUDShop(){ document.querySelectorAll(".shop button").forEach(b=>{ b.disabled = S.gold < TOWERS[b.dataset.t].cost && placing!==b.dataset.t; }); }
+function selectTower(id){ placing = placing===id ? null : id; selected=null; renderSel(); renderShop(); if(placing) setHint(`Click an empty square beside the route to build a ${TOWERS[id].name}. Right-click or Esc to cancel.`); }
+function renderSel(){
+  const box=$("selInfo"); const t=S.towers.find(x=>x.id===selected);
+  if(!t){ box.hidden=true; return; }
+  box.hidden=false;
+  const b=TOWERS[t.type], st=stats(t);
+  const facts=[];
+  if(b.kind==="shot"||b.kind==="splash") facts.push(`Damage ${Math.round(st.dmg)} · Range ${Math.round(st.range)}`);
+  if(b.kind==="splash") facts.push(`Blast radius ${Math.round(st.splash)}`);
+  if(b.kind==="slow") facts.push(`Slows threats by ${Math.round(st.slow*100)}% · Range ${Math.round(st.range)}`);
+  if(b.kind==="bank") facts.push(`Makes ${Math.round(st.income)} ATP after each wave`);
+  const syn=[...t.syn].map(s=>`<span class="chip" title="${COMBOS[s].effect}">${COMBOS[s].name}</span>`).join("");
+  const refund=Math.round(t.spent*0.7);
+  box.innerHTML=`<div class="eyebrow">Level ${t.level} of 3</div><h3>${b.name}</h3>
+    <p>${facts.join("<br>")}</p>${syn?`<p>${syn}</p>`:""}
+    <p class="muted">${b.bio}</p>
+    <div class="row">${t.level<3?`<button class="btn primary" id="upBtn">Upgrade (${upgradeCost(t)})</button>`:""}<button class="btn danger" id="sellBtn">Recycle (+${refund})</button></div>`;
+  const up=$("upBtn"); if(up){ up.disabled=S.gold<upgradeCost(t); up.onclick=()=>{ const c=upgradeCost(t); if(S.gold<c) return; S.gold-=c; t.spent+=c; t.level++; renderSel(); updateHUD(); }; }
+  $("sellBtn").onclick=()=>{ S.gold+=refund; S.towers=S.towers.filter(x=>x!==t); selected=null; computeSynergy(false); renderSel(); updateHUD(); };
+}
+function renderSelLight(){ const up=$("upBtn"); const t=S.towers.find(x=>x.id===selected); if(up&&t) up.disabled=S.gold<upgradeCost(t); }
+
+// ---------- modal helpers ----------
+function openModal(html){ modal.innerHTML=html; overlay.hidden=false; const f=modal.querySelector("button, textarea, input"); if(f) f.focus({preventScroll:true}); modal.scrollTop=0; }
+function closeModal(){ overlay.hidden=true; modal.innerHTML=""; last=performance.now(); }
+const esc = s => String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function tableHTML(t){ return `<div class="dtwrap"><table class="dt"><thead><tr>${t.cols.map(c=>`<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>${t.rows.map(r=>`<tr>${r.map(v=>`<td>${esc(v)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`; }
+function chartSVG(ch){
+  const w=540, h=280, ml=56, mr=18, mt=ch.series.length>1?34:16, mb=50, n=ch.x.length;
+  const all=ch.series.flatMap(s=>s.y), raw=Math.max(...all), step=Math.pow(10,Math.floor(Math.log10(raw||1)));
+  const ymax=Math.ceil(raw/step)*step || 1;
+  const X=i=>ml+i*(w-ml-mr)/(n-1), Y=v=>mt+(h-mt-mb)*(1-v/ymax);
+  const cols=["#1d6b8a","#c0492f"], dash=["","6 4"];
+  let s=`<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(ch.yl)} against ${esc(ch.xl)}" font-family="Figtree, sans-serif" font-size="12">`;
+  for(let k=0;k<=4;k++){ const v=ymax*k/4, y=Y(v); s+=`<line x1="${ml}" x2="${w-mr}" y1="${y}" y2="${y}" stroke="#cfdad5"/><text x="${ml-6}" y="${y+4}" text-anchor="end" fill="#4f625c">${+v.toFixed(2)}</text>`; }
+  ch.x.forEach((v,i)=>{ s+=`<text x="${X(i)}" y="${h-mb+16}" text-anchor="middle" fill="#4f625c">${esc(v)}</text>`; });
+  s+=`<line x1="${ml}" x2="${ml}" y1="${mt}" y2="${h-mb}" stroke="#1d2a26"/><line x1="${ml}" x2="${w-mr}" y1="${h-mb}" y2="${h-mb}" stroke="#1d2a26"/>`;
+  s+=`<text x="${(ml+w-mr)/2}" y="${h-10}" text-anchor="middle" fill="#1d2a26" font-weight="600">${esc(ch.xl)}</text>`;
+  s+=`<text transform="translate(14 ${(mt+h-mb)/2}) rotate(-90)" text-anchor="middle" fill="#1d2a26" font-weight="600">${esc(ch.yl)}</text>`;
+  ch.series.forEach((se,k)=>{
+    s+=`<polyline fill="none" stroke="${cols[k]}" stroke-width="2.5" stroke-dasharray="${dash[k]}" points="${se.y.map((v,i)=>`${X(i)},${Y(v)}`).join(" ")}"/>`;
+    se.y.forEach((v,i)=>{ s+= k ? `<rect x="${X(i)-4}" y="${Y(v)-4}" width="8" height="8" fill="${cols[k]}"/>` : `<circle cx="${X(i)}" cy="${Y(v)}" r="4" fill="${cols[k]}"/>`; });
+  });
+  if(ch.series.length>1){ let lx=ml+6; ch.series.forEach((se,k)=>{ s+=`<line x1="${lx}" x2="${lx+22}" y1="14" y2="14" stroke="${cols[k]}" stroke-width="2.5" stroke-dasharray="${dash[k]}"/><text x="${lx+28}" y="18" fill="#1d2a26">${esc(se.name)}</text>`; lx+=40+se.name.length*6.6; }); }
+  return s+"</svg>";
+}
+function stimHTML(st){
+  if(!st) return "";
+  return `<div class="stim">${st.text?`<p>${esc(st.text)}</p>`:""}${st.table?tableHTML(st.table):""}${st.chart?chartSVG(st.chart):""}${st.src?`<span class="src">${esc(st.src)}</span>`:""}</div>`;
+}
+
+// ---------- question selection (spaced repetition) ----------
+function pickQuestion(){
+  const now=SAVE.qCount;
+  let best=null, bestScore=-1;
+  for(const q of QUESTIONS){
+    if(S.recent.includes(q.id)) continue;
+    const st=SAVE.q[q.id]; let score;
+    if(!st) score=100+Math.random()*20;
+    else if(st.streak===0 && now-st.last>=3) score=200+Math.random()*20;   // missed: bring it back soon
+    else score=50 - st.streak*12 + Math.min(30, now-st.last) + Math.random()*6;
+    if(score>bestScore){ bestScore=score; best=q; }
+  }
+  return best || QUESTIONS[Math.floor(Math.random()*QUESTIONS.length)];
+}
+function recordAnswer(q, right){
+  SAVE.qCount++;
+  const st = SAVE.q[q.id] || {seen:0, right:0, streak:0, last:0};
+  st.seen++; if(right){ st.right++; st.streak++; } else st.streak=0;
+  st.last=SAVE.qCount; SAVE.q[q.id]=st; persist();
+  S.recent.push(q.id); if(S.recent.length>4) S.recent.shift();
+  S.runAsked++; if(right) S.runRight++;
+}
+function askMCQ({eyebrow, reward, onDone}){
+  const q=pickQuestion();
+  const order=[0,1,2,3].sort(()=>Math.random()-0.5);
+  openModal(`<div class="eyebrow">${esc(eyebrow)}</div>
+    <h2>${q.stim?"Read the data, pick the best answer":"Pick the best answer"}</h2>
+    <div class="tags"><span class="tag">${esc(q.topic)}</span><span class="tag">Skill: ${esc(q.skill)}</span><span class="tag">Correct: +${reward} ATP</span></div>
+    ${stimHTML(q.stim)}
+    <p class="qtext">${esc(q.q)}</p>
+    <div class="choices">${order.map((ci,i)=>`<button data-ci="${ci}"><b>${"ABCD"[i]}</b><span>${esc(q.c[ci])}</span></button>`).join("")}</div>
+    <div id="fb"></div>`);
+  modal.querySelectorAll(".choices button").forEach(btn=>btn.addEventListener("click",()=>{
+    const ci=+btn.dataset.ci, right=ci===q.a;
+    modal.querySelectorAll(".choices button").forEach(b=>{ b.disabled=true; if(+b.dataset.ci===q.a) b.classList.add("right"); });
+    if(!right) btn.classList.add("wrong");
+    recordAnswer(q,right);
+    if(right) S.gold+=reward;
+    $("fb").innerHTML=`<div class="feedback ${right?"ok":"no"}"><p><b>${right?`Correct. +${reward} ATP.`:"Not quite. This question will come back later."}</b></p><p>${esc(q.ex)}</p></div>
+      <div class="actions"><button class="btn primary" id="cont">Continue</button></div>`;
+    $("cont").onclick=()=>{ closeModal(); updateHUD(); onDone && onDone(right); };
+    $("cont").focus();
+  }));
+}
+
+// ---------- free response ----------
+function askSAQ(id, onDone){
+  const s=SAQS[id];
+  const hasKey=!!getKey();
+  openModal(`<div class="eyebrow">Free-response question · before wave ${S.wave+1}</div>
+    <h2>${esc(s.title)}</h2>
+    <p class="muted">Answer each part in one to three sentences. Reward: ${esc(s.reward)}. ${hasKey?"Claude will mark your answers.":"You will mark your answers against the scoring guide."}</p>
+    ${stimHTML(s.stim)}
+    ${s.parts.map(p=>`<label class="part" for="saq-${p.p}">(${p.p}) ${esc(p.q)}</label><textarea id="saq-${p.p}"></textarea>`).join("")}
+    <div class="actions"><button class="btn primary" id="saqSubmit">Submit answers</button></div>`);
+  $("saqSubmit").onclick=async ()=>{
+    const answers=s.parts.map(p=>$("saq-"+p.p).value.trim());
+    if(answers.some(a=>a.length<2)){ toast("Write something for every part first."); return; }
+    if(getKey()){
+      $("saqSubmit").disabled=true; $("saqSubmit").textContent="Marking…";
+      try{ const res=await gradeWithClaude(s, answers); showSAQResult(id, answers, res.map(r=>r.score?1:0), res.map(r=>r.feedback), onDone); }
+      catch(err){ selfMark(id, answers, onDone, `Claude couldn't mark this one (${esc(err.message)}). Mark it yourself below.`); }
+    } else selfMark(id, answers, onDone);
+  };
+}
+function selfMark(id, answers, onDone, note){
+  const s=SAQS[id];
+  openModal(`<div class="eyebrow">Mark your answers</div><h2>Check each part against the scoring guide</h2>
+    ${note?`<p class="muted">${note}</p>`:""}
+    <p class="muted">An AP reader gives 1 point per part if the answer does what the question asks, accurately and specifically. Be honest; this is how the real exam is scored.</p>
+    ${s.parts.map((p,i)=>`<div class="rubric"><b>(${p.p}) ${esc(p.q)}</b>
+      <div class="yours">${esc(answers[i])}</div>
+      <div class="muted" style="font-size:13px">Accepted answers include:</div><ul>${p.ok.map(o=>`<li>${esc(o)}</li>`).join("")}</ul>
+      <label><input type="checkbox" id="chk-${p.p}"> My answer earns this point</label></div>`).join("")}
+    <div class="actions"><button class="btn primary" id="markDone">Confirm score</button></div>`);
+  $("markDone").onclick=()=>{ const pts=s.parts.map(p=>$("chk-"+p.p).checked?1:0); showSAQResult(id, answers, pts, null, onDone, true); };
+}
+function showSAQResult(id, answers, pts, feedback, onDone, self){
+  const s=SAQS[id], total=pts.reduce((a,b)=>a+b,0), n=s.parts.length;
+  SAVE.saq.push({id, date:new Date().toISOString().slice(0,10), score:total, of:n, by:self?"self":"Claude", answers}); persist();
+  let reward="";
+  if(id==="frq1"){ S.gold+=50*total; reward=`+${50*total} ATP`; }
+  if(id==="frq2"){ S.gold+=30*total; S.bossMult=1-0.15*total; reward=`+${30*total} ATP, and the Rogue Growth Signal starts ${15*total}% weaker`; }
+  openModal(`<div class="eyebrow">Free-response result</div><h2>${total} of ${n} points</h2>
+    <p><b>${total? "Reward: "+reward+"." : "No reward this time. Read the guide below and use it next time."}</b></p>
+    ${s.parts.map((p,i)=>`<div class="rubric"><b>(${p.p}) ${pts[i]?"1 point":"0 points"}</b>${feedback&&feedback[i]?`<p style="margin:4px 0">${esc(feedback[i])}</p>`:""}
+      <div class="muted" style="font-size:13px">A strong answer could say:</div><ul>${p.ok.slice(0,2).map(o=>`<li>${esc(o)}</li>`).join("")}</ul></div>`).join("")}
+    <div class="actions"><button class="btn primary" id="saqCont">Continue to wave ${S.wave+1}</button></div>`);
+  $("saqCont").onclick=()=>{ closeModal(); updateHUD(); onDone&&onDone(); };
+}
+async function gradeWithClaude(s, answers){
+  const n=s.parts.length;
+  const system="You are an experienced AP Biology exam reader. Score each part of a free-response question 0 or 1 using College Board standards: 1 point if the response accurately and specifically does what the task verb asks (identify, calculate, explain, predict and justify) with correct biology; 0 if it is vague, inaccurate, or just restates the question. For calculations, the correct value is required. Be fair but not generous. Feedback: one or two plain sentences per part aimed at a 15-year-old, saying what earned or missed the point. Reply with JSON only: {\"parts\":[{\"score\":0,\"feedback\":\"...\"}, ...]} with exactly "+n+" parts.";
+  const stimText = s.stim ? `Experiment: ${s.stim.text}\n` + (s.stim.table ? [s.stim.table.cols.join(" | "), ...s.stim.table.rows.map(r=>r.join(" | "))].join("\n") + "\n\n" : "") : "";
+  const user = stimText + s.parts.map((p,i)=>`Part (${p.p}): ${p.q}\nExamples of acceptable answers: ${p.ok.join("; ")}\nStudent answer: ${answers[i]}`).join("\n\n");
+  const ctrl = new AbortController(); const timer=setTimeout(()=>ctrl.abort(), 30000);
+  const res = await fetch("https://api.anthropic.com/v1/messages", {method:"POST", signal:ctrl.signal,
+    headers:{"content-type":"application/json","x-api-key":getKey(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+    body:JSON.stringify({model:MODEL, max_tokens:800, system, messages:[{role:"user", content:user}]})});
+  clearTimeout(timer);
+  if(!res.ok){ throw new Error(res.status===401?"the API key was rejected":"error "+res.status); }
+  const data=await res.json(); const text=(data.content||[]).map(c=>c.text||"").join("");
+  const json=JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}")+1));
+  if(!json.parts || json.parts.length<n) throw new Error("unexpected reply");
+  return json.parts.slice(0,n);
+}
+
+// ---------- flow ----------
+function startWave(){
+  if(S.running || S.wave>=10 || !overlay.hidden) return;
+  placing=null; renderShop();
+  const n=S.wave+1;
+  if(SAQ_WAVES[n]) askSAQ(SAQ_WAVES[n], beginWave);
+  else askMCQ({eyebrow:`Lab report · before wave ${n}`, reward:40, onDone:()=>beginWave()});
+}
+function study(){
+  if(S.running || S.studyLeft<=0 || !overlay.hidden) return;
+  S.studyLeft--; updateHUD();
+  askMCQ({eyebrow:"Study session", reward:25, onDone:()=>{}});
+}
+function discover(id){
+  const cb=COMBOS[id];
+  openModal(`<div class="eyebrow">Connection discovered</div><h2>${esc(cb.name)}</h2>
+    <p><b>${esc(TOWERS[cb.a].name)}</b> next to <b>${esc(TOWERS[cb.b].name)}</b>. ${esc(cb.effect)}</p>
+    <div class="feedback"><p>${esc(cb.why)}</p></div>
+    <p class="muted">The AP exam rewards explaining how parts of a cell depend on each other. Saved to your Codex.</p>
+    <div class="actions"><button class="btn primary" id="ok">Got it</button></div>`);
+  $("ok").onclick=closeModal;
+}
+function runAccuracy(){ return S.runAsked? Math.round(100*S.runRight/S.runAsked) : 0; }
+function victory(){
+  const acc=runAccuracy();
+  const stars = (S.trade>=15 && acc>=80) ? 3 : (S.trade>=8 || acc>=60) ? 2 : 1;
+  const lv = SAVE.levels[LEVEL_ID] || {stars:0, clears:0};
+  lv.stars=Math.max(lv.stars||0, stars); lv.clears=(lv.clears||0)+1; lv.bestTrade=Math.max(lv.bestTrade||0,S.trade); lv.lastClear=new Date().toISOString().slice(0,10);
+  SAVE.levels[LEVEL_ID]=lv; persist(); drop(SNAP_KEY);
+  openModal(`<div class="eyebrow">Level 1 complete</div><h2>The cell survived</h2>
+    <div class="stars" aria-label="${stars} of 3 stars">${"★".repeat(stars)}${"☆".repeat(3-stars)}</div>
+    <p>Health left: <b>${S.trade}</b> of 20 · Questions right this run: <b>${S.runRight} of ${S.runAsked}</b> (${acc}%)</p>
+    <p class="muted">Three stars needs 15+ Health and 80% of questions right. Questions you missed will come back first next time.</p>
+    <div class="actions"><button class="btn" id="prog">See progress</button><button class="btn primary" id="again">Play again</button></div>`);
+  $("again").onclick=()=>{ closeModal(); newRun(); };
+  $("prog").onclick=showProgress;
+}
+function gameOver(){
+  const sn=load(SNAP_KEY,null);
+  openModal(`<div class="eyebrow">Cell lost</div><h2>The nucleus was overrun on wave ${S.wave+1}</h2>
+    <p>Try more Cytoskeleton to slow threats down, put a Cytoskeleton next to a Central Vacuole, and pair a Chloroplast with a Mitochondrion for more ATP.</p>
+    <div class="actions">${sn?`<button class="btn" id="retry">Retry wave ${sn.wave+1}</button>`:""}<button class="btn primary" id="restart">Restart level</button></div>`);
+  if(sn) $("retry").onclick=()=>{ closeModal(); restore(sn); };
+  $("restart").onclick=()=>{ closeModal(); newRun(); };
+}
+
+// ---------- menus ----------
+function showStart(){
+  const sn=load(SNAP_KEY,null), lv=SAVE.levels[LEVEL_ID];
+  openModal(`<div class="eyebrow">AP Biology</div><h2>Cell Defense</h2>
+    <p>Defend a living cell. Every tower is a real part of the cell, you spend ATP (the cell's energy) to build, and you earn more by answering exam-style questions built on real experiments and data.</p>
+    <div class="grid2">
+      <div class="levelcard"><div class="eyebrow">Level 1 · The Cell</div><b>A plant cell under attack</b>
+        <span class="muted">Campbell ch. 6–12 (AP Units 2–4) · 10 waves${lv?` · Best: ${"★".repeat(lv.stars)}${"☆".repeat(3-lv.stars)}`:""}</span></div>
+      <div class="levelcard locked"><div class="eyebrow">Level 2</div><b>Coming later</b><span class="muted">Heredity and gene expression</span></div>
+    </div>
+    <ul class="how">
+      <li>Build organelles beside the route. Free radicals, toxins, viruses and cyanide break in through the membrane and head for the nucleus.</li>
+      <li>Before each wave you answer one data question. Right answers pay 40 ATP.</li>
+      <li>Chloroplasts and mitochondria make ATP after every wave. Cyanide that gets through shuts your mitochondria down for that wave.</li>
+      <li>Put organelles that work together side by side to discover connections and bonuses.</li>
+      <li>Waves 5 and 10 open with a free-response experiment question, like the real exam.</li>
+    </ul>
+    <p class="muted" style="font-size:13px">Progress saves automatically in this browser. Keys: 1–6 pick an organelle, Space starts a wave, Esc cancels.</p>
+    <div class="actions">${sn&&sn.level===LEVEL_ID?`<button class="btn" id="cont">Continue run (wave ${sn.wave+1})</button>`:""}<button class="btn primary" id="new">New run</button></div>`);
+  if(sn&&sn.level===LEVEL_ID) $("cont").onclick=()=>{ closeModal(); restore(sn); };
+  $("new").onclick=()=>{ closeModal(); newRun(); };
+}
+function showCodex(){
+  openModal(`<div class="eyebrow">Codex</div><h2>Organelles and connections</h2>
+    <div class="grid2">${Object.values(TOWERS).map(b=>`<div class="levelcard"><b>${esc(b.name)}</b><span class="muted" style="font-size:13px">${esc(b.role)} · ${b.cost} ATP</span><span style="font-size:14px">${esc(b.bio)}</span></div>`).join("")}</div>
+    <h3 class="sec">Connections (${SAVE.combos.length} of ${Object.keys(COMBOS).length} found)</h3>
+    ${Object.entries(COMBOS).map(([id,cb])=>SAVE.combos.includes(id)
+      ? `<div class="rubric"><b>${esc(cb.name)}</b>: ${esc(TOWERS[cb.a].name)} + ${esc(TOWERS[cb.b].name)}<p style="margin:4px 0;font-size:14px">${esc(cb.why)}</p></div>`
+      : `<div class="rubric muted">Undiscovered. Try placing two organelles that depend on each other side by side.</div>`).join("")}
+    <h3 class="sec">Threats</h3>
+    <p style="font-size:14px"><b>Free radicals</b> are unstable, highly reactive molecules (often forms of oxygen) that damage membranes, proteins and DNA. <b>Toxins</b> are harmful chemicals; plant cells can lock some away in the vacuole. <b>Viruses</b> get inside cells and hijack their machinery to make more viruses. <b>Cyanide</b> blocks the last step of the electron transport chain in mitochondria (ch. 9). <b>The Rogue Growth Signal</b> stands for a signalling pathway stuck "on" that tells the cell to divide when it shouldn't. If the cell-cycle checkpoints fail too, the result is uncontrolled division: cancer (ch. 11–12).</p>
+    <p class="muted" style="font-size:13px">Game simplifications: real organelles don't shoot, and the cytoskeleton supports and moves things rather than trapping invaders. The biology on every card is accurate.</p>
+    <div class="actions"><button class="btn primary" id="x">Close</button></div>`);
+  $("x").onclick=closeModal;
+}
+function showProgress(){
+  const rows={}, topics={};
+  let seen=0,right=0,mastered=0;
+  for(const q of QUESTIONS){
+    const st=SAVE.q[q.id]; if(!st) continue;
+    seen+=st.seen; right+=st.right; if(st.streak>=2) mastered++;
+    (rows[q.skill]=rows[q.skill]||{s:0,r:0}); rows[q.skill].s+=st.seen; rows[q.skill].r+=st.right;
+    (topics[q.topic]=topics[q.topic]||{s:0,r:0}); topics[q.topic].s+=st.seen; topics[q.topic].r+=st.right;
+  }
+  const pct=(r,s)=>s?Math.round(100*r/s):0;
+  const tbl=(obj,label,sortFn)=>`<div class="tablewrap"><table class="stats"><thead><tr><th>${label}</th><th>Answered</th><th>Right</th><th style="width:30%"></th></tr></thead><tbody>${
+    Object.entries(obj).sort(sortFn).map(([k,v])=>`<tr><td>${esc(k)}</td><td>${v.s}</td><td>${pct(v.r,v.s)}%</td><td><div class="meter"><i style="width:${pct(v.r,v.s)}%"></i></div></td></tr>`).join("") || `<tr><td colspan="4" class="muted">No questions answered yet.</td></tr>`}</tbody></table></div>`;
+  const chNum=k=>parseInt(k.replace(/\D+/,""),10);
+  const weak = QUESTIONS.filter(q=>SAVE.q[q.id] && SAVE.q[q.id].streak===0).map(q=>`<li>${esc(q.q)} <span class="muted">(${esc(q.topic)})</span></li>`).join("");
+  const lv=SAVE.levels[LEVEL_ID];
+  openModal(`<div class="eyebrow">Progress · saved in this browser</div><h2>How Adriano is doing</h2>
+    <div class="grid2">
+      <div class="levelcard"><span class="muted">Questions answered</span><b style="font-size:24px">${seen}</b></div>
+      <div class="levelcard"><span class="muted">Accuracy</span><b style="font-size:24px">${pct(right,seen)}%</b></div>
+      <div class="levelcard"><span class="muted">Mastered (right twice in a row)</span><b style="font-size:24px">${mastered} of ${QUESTIONS.length}</b></div>
+      <div class="levelcard"><span class="muted">Level 1</span><b style="font-size:24px">${lv?`${"★".repeat(lv.stars)}${"☆".repeat(3-lv.stars)} · cleared ${lv.clears}×`:"Not cleared yet"}</b></div>
+    </div>
+    <h3 class="sec">By chapter</h3>${tbl(topics,"Chapter",(a,b)=>chNum(a[0])-chNum(b[0]))}
+    <h3 class="sec">By exam skill</h3>${tbl(rows,"Skill")}
+    <h3 class="sec">Free-response questions</h3>
+    ${SAVE.saq.length?`<div class="tablewrap"><table class="stats"><thead><tr><th>Date</th><th>Question</th><th>Score</th><th>Marked by</th></tr></thead><tbody>${SAVE.saq.slice(-8).reverse().map(a=>`<tr><td>${a.date}</td><td>${esc((SAQS[a.id]||{title:a.id}).title.replace("Free response: ",""))}</td><td>${a.score}/${a.of||3}</td><td>${a.by}</td></tr>`).join("")}</tbody></table></div>`:`<p class="muted">None yet. The first one comes before wave 5.</p>`}
+    ${weak?`<h3 class="sec">Missed last time (coming back soon)</h3><ul class="how">${weak}</ul>`:""}
+    <h3 class="sec">Move progress to another computer</h3>
+    <p class="muted" style="font-size:13.5px">Copy this save code, then paste it into the same box on the other computer and press Load.</p>
+    <textarea id="saveCode" readonly>${btoa(unescape(encodeURIComponent(JSON.stringify(SAVE))))}</textarea>
+    <div class="actions" style="justify-content:flex-start"><button class="btn" id="copyCode">Copy save code</button></div>
+    <label class="part" for="loadCode">Paste a save code</label><textarea id="loadCode"></textarea>
+    <div class="actions" style="justify-content:flex-start"><button class="btn" id="loadBtn">Load</button><span id="loadMsg" class="muted"></span></div>
+    <p class="muted" style="font-size:12.5px">Questions are written in AP format for practice and follow Campbell Biology (13th ed.) chapters 6–12. They are not official College Board questions.</p>
+    <div class="actions"><button class="btn primary" id="x">Close</button></div>`);
+  $("x").onclick=closeModal;
+  $("copyCode").onclick=()=>{ const ta=$("saveCode"); const fallback=()=>{ ta.select(); toast("Press Ctrl+C to copy"); }; if(navigator.clipboard) navigator.clipboard.writeText(ta.value).then(()=>toast("Save code copied"), fallback); else fallback(); };
+  $("loadBtn").onclick=()=>{
+    try{ const obj=JSON.parse(decodeURIComponent(escape(atob($("loadCode").value.trim())))); if(!obj||obj.version!==1||obj.game!=="cell-defense") throw 0;
+      SAVE=Object.assign(freshSave(), obj); persist(); $("loadMsg").textContent="Loaded. Progress updated."; setTimeout(showProgress,600);
+    }catch(e){ $("loadMsg").textContent="That code didn't work. Copy the whole code and try again."; }
+  };
+}
+function showSettings(){
+  const k=getKey();
+  openModal(`<div class="eyebrow">Settings · for a parent</div><h2>Marking written answers with Claude</h2>
+    <p>With an Anthropic API key, Claude marks the free-response questions the way an AP reader would and explains each point. Without one, Adriano marks his own answers against the scoring guide.</p>
+    <p class="muted" style="font-size:13.5px">The key is stored only in this browser on this computer. Create one at console.anthropic.com and set a monthly spending limit there. Each marked answer costs about a cent.</p>
+    <label class="part" for="apikey">API key</label><input type="password" id="apikey" placeholder="sk-ant-…" value="${esc(k)}" autocomplete="off">
+    <div class="actions" style="justify-content:flex-start"><button class="btn primary" id="saveKey">Save key</button>${k?`<button class="btn" id="delKey">Remove key</button>`:""}<span id="keyMsg" class="muted"></span></div>
+    <h3 class="sec">Reset</h3>
+    <p class="muted" style="font-size:13.5px">Erases all progress, stars and question history in this browser.</p>
+    <div class="actions" style="justify-content:flex-start"><button class="btn danger" id="reset">Erase progress</button></div>
+    <div class="actions"><button class="btn primary" id="x">Close</button></div>`);
+  $("x").onclick=closeModal;
+  $("saveKey").onclick=()=>{ const v=$("apikey").value.trim(); try{ localStorage.setItem(KEY_KEY,v); $("keyMsg").textContent="Saved."; }catch(e){ $("keyMsg").textContent="This browser blocked saving. Try a normal (not private) window."; } };
+  if(k) $("delKey").onclick=()=>{ drop(KEY_KEY); showSettings(); };
+  let armed=false;
+  $("reset").onclick=()=>{ if(!armed){ armed=true; $("reset").textContent="Press again to erase everything"; return; } SAVE=freshSave(); persist(); drop(SNAP_KEY); closeModal(); newRun(); showStart(); };
+}
+
+// ---------- wiring ----------
+$("startBtn").onclick=startWave;
+$("studyBtn").onclick=study;
+$("speedBtn").onclick=()=>{ S.speed = S.speed===1?2:S.speed===2?3:1; $("speedBtn").textContent=S.speed+"×"; };
+$("codexBtn").onclick=showCodex; $("progressBtn").onclick=showProgress; $("settingsBtn").onclick=showSettings;
+$("menuBtn").onclick=()=>{ if(S.running){ toast("Finish the wave first. Your run saves after every wave."); return; } showStart(); };
+document.addEventListener("keydown", e=>{
+  if(!overlay.hidden || e.target.matches("textarea,input")) return;
+  if(e.code==="Space"){ e.preventDefault(); startWave(); }
+  else if(e.key==="Escape"){ placing=null; selected=null; renderShop(); renderSel(); }
+  else { const id=Object.keys(TOWERS).find(k=>TOWERS[k].key===e.key); if(id) selectTower(id); }
+});
+
+window.__cd = { get S(){ return S; }, QUESTIONS, SAQS };
+newRun(); SAVE.runs--; persist();
+showStart();
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
