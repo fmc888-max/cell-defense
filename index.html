@@ -128,11 +128,11 @@ h3.sec{font-family:var(--f-display);font-weight:700;font-size:19px;margin:18px 0
 <body>
 <div class="app">
   <header class="bar">
-    <div class="brand"><h1>Cell Defense</h1><span id="levelName">Level 1 · The Cell (Campbell ch. 6–12)</span></div>
+    <div class="brand"><h1>Cell Defense</h1><span id="levelName">Version 1.1 · Level 1 · The Cell (Campbell ch. 6–12) · 50 waves</span></div>
     <div class="stats">
       <div class="stat trade" id="tradeBox"><small>Health</small><b id="trade">20</b></div>
       <div class="stat gold"><small>ATP</small><b id="gold">0</b></div>
-      <div class="stat"><small>Wave</small><b id="wave">0/10</b></div>
+      <div class="stat"><small>Wave</small><b id="wave">0/50</b></div>
     </div>
     <nav class="menu">
       <button class="btn ghost" id="codexBtn">Codex</button>
@@ -155,6 +155,9 @@ h3.sec{font-family:var(--f-display);font-weight:700;font-size:19px;margin:18px 0
         </div>
         <div class="wavebar" style="margin-top:8px">
           <button class="btn" id="studyBtn" style="flex:1">Study for ATP (+25)</button>
+        </div>
+        <div class="wavebar" style="margin-top:8px">
+          <button class="btn" id="repairBtn" style="flex:1" title="DNA repair enzymes fix damaged DNA">Repair DNA (+2 Health) · 150 ATP</button>
         </div>
         <p class="muted" id="hint" style="margin:8px 0 0;font-size:13px">Build a few organelles, then start the wave. You answer one exam question before each wave.</p>
       </div>
@@ -218,8 +221,28 @@ const ENEMIES = {
   toxin:   {name:"Toxins", hp:85, speed:50, reward:7, leak:2, r:12, color:"#c86bd9"},
   virus:   {name:"Virus", hp:230, speed:30, reward:12, leak:3, r:16, color:"#e05a5a"},
   cyanide: {name:"Cyanide", hp:60, speed:56, reward:6, leak:1, r:10, color:"#5ec8e8", poison:true},
-  boss:    {name:"Rogue Growth Signal", hp:4200, speed:24, reward:0, leak:15, r:24, color:"#ff4d6d", boss:true}
+  mutant:  {name:"Mutant virus", hp:260, speed:52, reward:14, leak:3, r:15, color:"#ff7a59"},
+  daughter:{name:"Daughter cell", hp:1800, speed:38, reward:20, leak:3, r:14, color:"#ff8fa3"},
+  boss:    {name:"Rogue Growth Signal", hp:4200, speed:24, reward:60, leak:15, r:24, color:"#ff4d6d", boss:true},
+  giant:   {name:"Giant Virus", hp:9500, speed:22, reward:80, leak:15, r:26, color:"#e05a5a", boss:true},
+  ostorm:  {name:"Oxidative Storm", hp:17000, speed:26, reward:100, leak:15, r:26, color:"#ffb347", boss:true},
+  cloud:   {name:"Cyanide Cloud", hp:26000, speed:24, reward:120, leak:15, r:27, color:"#5ec8e8", boss:true, poison:true},
+  tumour:  {name:"Runaway Division", hp:30000, speed:20, reward:150, leak:15, r:29, color:"#ff4d6d", boss:true, splits:4}
 };
+const TOTAL = 50, HARD_FROM = 31, REPAIR_COST = 150;
+const BOSS_AT = {10:"boss", 20:"giant", 30:"ostorm", 40:"cloud", 50:"tumour"};
+const BOSS_HINT = {boss:"Stop it before the cell divides out of control!", giant:"It is huge and tough. Focus your heaviest hitters on it.", ostorm:"It moves faster than other bosses.", cloud:"If it gets through, your mitochondria make no ATP.", tumour:"When it dies it splits into daughter cells. Save firepower near the nucleus."};
+// waves 1–10 are hand-made; 11–50 are generated, and 31–50 are the hard tier
+function waveDef(n){
+  if(n<=10) return WAVES[n-1];
+  const hard = n>=HARD_FROM, k = hard ? 1.25 : 1;
+  const w = [["radical", Math.round((6+n*0.45)*k)], ["toxin", Math.round((3+n*0.3)*k)]];
+  if(n%2===0 || n>=25) w.push(["virus", Math.round((n/6)*k)]);
+  if(n%3===0) w.push(["cyanide", Math.round(2+n/10)]);
+  if(hard) w.push(["mutant", Math.round(2+(n-HARD_FROM)*0.45)]);
+  if(BOSS_AT[n]){ const e=w.map(([t,c])=>[t,Math.max(1,Math.round(c*0.4))]); return [...e.slice(0,2), [BOSS_AT[n],1], ...e.slice(2)]; }
+  return w;
+}
 const WAVES = [
   [["radical",8]],
   [["radical",12]],
@@ -232,7 +255,7 @@ const WAVES = [
   [["radical",18],["toxin",10],["virus",4],["cyanide",4]],
   [["toxin",6],["boss",1],["toxin",8]]
 ];
-const SAQ_WAVES = {5:"frq1", 10:"frq2"};
+const SAQ_WAVES = {5:"frq1", 10:"frq2", 20:"frq3", 30:"frq4", 40:"frq1", 50:"frq2"};
 
 // ---------- question bank: Campbell ch. 6–12, written in AP format for practice (not official College Board items) ----------
 const CH = {6:"Ch 6 · Tour of the cell", 7:"Ch 7 · Membranes", 8:"Ch 8 · Enzymes & energy", 9:"Ch 9 · Cellular respiration", 10:"Ch 10 · Photosynthesis", 11:"Ch 11 · Cell communication", 12:"Ch 12 · Cell cycle"};
@@ -393,6 +416,26 @@ const SAQS = {
     ok:["Without spindle microtubules, the chromosomes can't be attached and pulled apart, so the cells can't move on to anaphase","The M (spindle) checkpoint holds the cell in metaphase until every chromosome is attached to the spindle"]},
    {p:"c", q:"Cancer cells divide out of control. Explain why a drug that blocks spindle formation could be used to treat cancer.",
     ok:["Cells that can't form a spindle can't finish mitosis, so tumour cells stop dividing","Cancer cells divide much more often than most normal cells, so a drug that stops mitosis affects them the most"]}
+  ]},
+ frq3: {title:"Free response: light, CO₂ and an aquatic plant",
+  stim:{text:"A student placed sprigs of an aquatic plant in water under a lamp and counted the oxygen bubbles released. Some beakers had baking soda (sodium bicarbonate) added, which releases dissolved CO₂ into the water.", table:{cols:["Distance from lamp (cm)","10","20","40"], rows:[["With bicarbonate (bubbles/min)","30","18","8"],["Without bicarbonate (bubbles/min)","6","5","3"]]}},
+  parts:[
+   {p:"a", q:"Explain why the student added bicarbonate to some of the beakers.",
+    ok:["Bicarbonate supplies CO₂, which the plant needs for the Calvin cycle (carbon fixation)","To test whether CO₂ availability affects the rate of photosynthesis"]},
+   {p:"b", q:"Explain why the rate of bubble production decreases as the plant is moved farther from the lamp.",
+    ok:["Less light reaches the plant, so the light reactions split less water and release less O₂","Less light means the light reactions make less ATP and NADPH, so photosynthesis slows"]},
+   {p:"c", q:"Explain why the rate without bicarbonate stays low even at 10 cm from the lamp.",
+    ok:["CO₂ is the limiting factor: without it the Calvin cycle can't fix carbon, so extra light doesn't help","The Calvin cycle stops using ATP and NADPH, so the light reactions run out of ADP and NADP⁺ and slow down too"]}
+  ]},
+ frq4: {title:"Free response: a signal that won't switch off",
+  stim:{text:"Researchers grew normal cells and mutant cells whose Ras protein is permanently switched on. Half of each group was given a growth factor, and the researchers recorded the percentage of cells that divided within 24 hours.", table:{cols:["Cells","No growth factor","With growth factor"], rows:[["Normal cells","2%","40%"],["Mutant cells (Ras always on)","38%","41%"]]}},
+  parts:[
+   {p:"a", q:"Identify the group that serves as the negative control in this experiment.",
+    ok:["Normal cells given no growth factor"]},
+   {p:"b", q:"Describe how a growth-factor signal is passed from outside the cell to the inside.",
+    ok:["The growth factor binds a receptor protein on the cell surface; the receptor changes shape and is activated","The activated receptor switches on relay proteins such as Ras, which start a kinase cascade that carries the signal to the nucleus"]},
+   {p:"c", q:"Using the data, explain why the mutant cells divide even without growth factor.",
+    ok:["Ras is always on, so it sends the 'divide' signal down the pathway whether or not a growth factor binds the receptor","The steps after the receptor are permanently active, so the cell behaves as if it is always receiving the signal; 38% divide without it, almost the same as with it"]}
   ]}
 };
 
@@ -439,7 +482,7 @@ function restore(sn){
 // ---------- towers ----------
 function towerAt(c,r){ return S.towers.find(t=>t.c===c&&t.r===r); }
 function stats(t){
-  const b = TOWERS[t.type], lv = [1,1.55,2.2][t.level-1];
+  const b = TOWERS[t.type], lv = [1,1.55,2.2,3.0,4.0][t.level-1];
   let dmg=b.dmg*lv, range=b.range*(1+0.1*(t.level-1)), splash=b.splash||0, slow=b.slow?Math.min(0.65,b.slow+0.08*(t.level-1)):0, income=(b.income||0)*(1+0.5*(t.level-1));
   if(t.syn.has("traffic") && t.type==="vac") dmg*=1.3;
   if(t.syn.has("phos") && t.type==="kinase"){ splash*=1.35; dmg*=1.15; }
@@ -547,7 +590,7 @@ function drawTowerIcon(t, x, y){
   } else { ctx.beginPath(); ctx.arc(cx,cy,T/2-5,0,Math.PI*2); ctx.fill(); }
   if(t.id===selected){ ctx.strokeStyle="#fff"; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(cx,cy,T/2-2,0,Math.PI*2); ctx.stroke(); }
   if(!(t.type==="mito"||t.type==="chloro")){ ctx.fillStyle="#06150f"; ctx.font="bold 12px Figtree, sans-serif"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText(b.short, cx, cy-2); }
-  for(let i=0;i<t.level;i++){ ctx.fillStyle=(t.type==="mito"||t.type==="chloro")?"#fff":"#06150f"; ctx.beginPath(); ctx.arc(cx-8+i*8, y+T-9, 2.4, 0, Math.PI*2); ctx.fill(); }
+  for(let i=0;i<t.level;i++){ ctx.fillStyle=(t.type==="mito"||t.type==="chloro")?"#fff":"#06150f"; ctx.beginPath(); ctx.arc(cx-(t.level-1)*3.5+i*7, y+T-9, 2.2, 0, Math.PI*2); ctx.fill(); }
 }
 function draw(){
   ctx.drawImage(bg,0,0);
@@ -579,12 +622,15 @@ function draw(){
     const d=ENEMIES[e.type], p=pointAt(e.d);
     if(d.boss){
       const pulse = 1+0.08*Math.sin(now/180);
-      const g=ctx.createRadialGradient(p.x,p.y,2,p.x,p.y,d.r*1.8*pulse); g.addColorStop(0,"rgba(120,10,30,0.95)"); g.addColorStop(0.6,"rgba(255,77,109,0.65)"); g.addColorStop(1,"rgba(255,77,109,0)");
+      const g=ctx.createRadialGradient(p.x,p.y,2,p.x,p.y,d.r*1.8*pulse); g.addColorStop(0,"rgba(10,10,20,0.95)"); g.addColorStop(0.6,d.color+"aa"); g.addColorStop(1,d.color+"00");
       ctx.fillStyle=g; ctx.beginPath(); ctx.arc(p.x,p.y,d.r*1.8*pulse,0,Math.PI*2); ctx.fill();
-      ctx.strokeStyle="#ff8fa3"; ctx.lineWidth=3;
+      ctx.strokeStyle=d.color; ctx.lineWidth=3;
       for(let k=0;k<10;k++){ const a=k*Math.PI/5+now/900; ctx.beginPath(); ctx.moveTo(p.x+Math.cos(a)*d.r,p.y+Math.sin(a)*d.r); ctx.lineTo(p.x+Math.cos(a)*(d.r+9),p.y+Math.sin(a)*(d.r+9)); ctx.stroke(); }
-      ctx.fillStyle="#e8f1ec"; ctx.font="12px Figtree, sans-serif"; ctx.textAlign="center"; ctx.fillText("Rogue Growth Signal", p.x, p.y-d.r-16); ctx.textAlign="left";
-    } else if(e.type==="virus"){
+      ctx.fillStyle="#e8f1ec"; ctx.font="12px Figtree, sans-serif"; ctx.textAlign="center"; ctx.fillText(d.name, p.x, p.y-d.r-16); ctx.textAlign="left";
+    } else if(e.type==="daughter"){
+      ctx.fillStyle=d.color; ctx.beginPath(); ctx.arc(p.x,p.y,d.r,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle="rgba(80,0,20,0.7)"; ctx.beginPath(); ctx.arc(p.x,p.y,d.r*0.45,0,Math.PI*2); ctx.fill();
+    } else if(e.type==="virus"||e.type==="mutant"){
       ctx.fillStyle=d.color; ctx.beginPath();
       for(let k=0;k<6;k++){ const a=k*Math.PI/3+now/1200; const px=p.x+Math.cos(a)*d.r, py=p.y+Math.sin(a)*d.r; k?ctx.lineTo(px,py):ctx.moveTo(px,py); } ctx.closePath(); ctx.fill();
       ctx.strokeStyle=d.color; ctx.lineWidth=2;
@@ -617,20 +663,20 @@ function update(dt){
   if(!S.running) return;
   S.spawnT -= dt;
   if(S.queue.length && S.spawnT<=0){
-    const type=S.queue.shift(), d=ENEMIES[type];
-    const scale = d.boss ? S.bossMult : (1 + 0.13*(S.wave));
+    const type=S.queue.shift(), d=ENEMIES[type], n=S.wave+1, hard=n>=HARD_FROM;
+    const scale = d.boss ? S.bossMult : (1 + 0.13*(S.wave)) * (hard ? 1.25+0.04*(n-HARD_FROM+1) : 1);
     const hp = Math.round(d.hp*scale);
-    S.enemies.push({type, d:0, hp, max:hp, slowed:false});
-    S.spawnT = d.boss ? 3 : (type==="virus" ? 1.6 : type==="toxin" ? 0.85 : 0.6);
+    S.enemies.push({type, d:0, hp, max:hp, slowed:false, spd: hard ? 1.08+0.006*(n-HARD_FROM+1) : 1});
+    S.spawnT = (d.boss ? 3 : (type==="virus"||type==="mutant" ? 1.4 : type==="toxin" ? 0.8 : 0.55)) * (hard ? 0.8 : 1);
   }
   const slows = S.towers.filter(t=>TOWERS[t.type].kind==="slow").map(t=>({t, st:stats(t)}));
   for(const e of S.enemies){
     const p=pointAt(e.d); let f=1; e.slowed=false;
     for(const s of slows){ if(Math.hypot(p.x-(s.t.c*T+T/2), p.y-(s.t.r*T+T/2)) <= s.st.range){ f=Math.min(f, 1-s.st.slow*(ENEMIES[e.type].boss?0.5:1)); e.slowed=true; } }
-    e.d += ENEMIES[e.type].speed*f*dt;
+    e.d += ENEMIES[e.type].speed*(e.spd||1)*f*dt;
   }
   for(const e of S.enemies){ if(e.d>=PATH_LEN && e.hp>0){ const d=ENEMIES[e.type]; e.hp=0; e.leaked=true; S.trade-=d.leak;
-    if(d.poison){ S.poisoned++; toast("Cyanide got through: mitochondria will make no ATP this wave"); }
+    if(d.poison){ S.poisoned++; toast(`${d.name} got through: −${d.leak} Health, and mitochondria make no ATP this wave`); }
     else toast(`${d.name} reached the nucleus: −${d.leak} Health`); } }
   for(const t of S.towers){
     const b=TOWERS[t.type]; if(b.kind==="slow"||b.kind==="bank") continue;
@@ -659,14 +705,19 @@ function update(dt){
 function hit(e,dmg){
   if(e.hp<=0) return;
   e.hp-=dmg;
-  if(e.hp<=0){ const d=ENEMIES[e.type]; if(d.reward){ S.gold+=d.reward; const p=pointAt(e.d); S.fx.push({kind:"coin",txt:"+"+d.reward,x:p.x,y:p.y,t:0.8,life:0.8}); } }
+  if(e.hp<=0){ const d=ENEMIES[e.type]; if(d.reward){ S.gold+=d.reward; const p=pointAt(e.d); S.fx.push({kind:"coin",txt:"+"+d.reward,x:p.x,y:p.y,t:0.8,life:0.8}); }
+    if(d.splits){ for(let i=0;i<d.splits;i++){ const hp=ENEMIES.daughter.hp; S.enemies.push({type:"daughter", d:Math.max(0,e.d-70-i*30), hp, max:hp, slowed:false, spd:1}); }
+      toast("Runaway Division split into daughter cells! Stop them too."); }
+  }
 }
 function beginWave(){
   const n=S.wave+1; S.queue=[]; S.poisoned=0;
-  for(const [type,count] of WAVES[n-1]) for(let i=0;i<count;i++) S.queue.push(type);
+  const def=waveDef(n);
+  for(const [type,count] of def) for(let i=0;i<count;i++) S.queue.push(type);
   S.spawnT=0.4; S.running=true; selected=null; renderSel(); updateHUD();
-  const hasCN = WAVES[n-1].some(([t])=>t==="cyanide");
-  setHint(n===10 ? "The Rogue Growth Signal is heading for the nucleus. Stop it before the cell divides out of control!" : hasCN ? `Wave ${n}: cyanide incoming (blue). If any gets through, your mitochondria make no ATP this wave.` : `Wave ${n} is inside the cell.`);
+  const hasCN = def.some(([t])=>ENEMIES[t].poison);
+  if(n===HARD_FROM) toast("Danger zone: from now on threats are tougher and faster");
+  setHint(BOSS_AT[n] ? `Boss wave: the ${ENEMIES[BOSS_AT[n]].name} is heading for the nucleus. ${BOSS_HINT[BOSS_AT[n]]}` : (n>=HARD_FROM ? "Danger zone. " : "") + (hasCN ? `Wave ${n}: cyanide incoming (blue). If any gets through, your mitochondria make no ATP this wave.` : `Wave ${n} is inside the cell.`));
 }
 function endWave(){
   S.running=false; S.wave++;
@@ -674,11 +725,14 @@ function endWave(){
   for(const t of S.towers){ if(t.type==="chloro") income+=Math.round(stats(t).income); if(t.type==="mito") mitoIncome+=Math.round(stats(t).income); }
   const blocked = S.poisoned>0 && mitoIncome>0;
   if(!S.poisoned) income+=mitoIncome;
-  S.gold+=income; S.studyLeft=2;
-  if(S.wave>=10){ updateHUD(); victory(); return; }
+  S.gold+=income; S.studyLeft=2; S.bossMult=1;
+  if(S.wave>=TOTAL){ updateHUD(); victory(); return; }
+  const repaired = BOSS_AT[S.wave] && S.trade<20;
+  if(BOSS_AT[S.wave]) S.trade=20;
   snapshot(); updateHUD(); renderShop();
-  toast(blocked ? `Wave ${S.wave} held, but cyanide jammed the electron transport chain. +${income} ATP (mitochondria made none)` : `Wave ${S.wave} held. +${income} ATP`);
-  setHint(SAQ_WAVES[S.wave+1] ? `Next up: a free-response question before wave ${S.wave+1}. Good answers earn big rewards.` : "Build, upgrade, or study for ATP, then start the next wave.");
+  toast(repaired ? `Boss beaten! DNA repair restores Health to 20. +${income} ATP` : blocked ? `Wave ${S.wave} held, but cyanide jammed the electron transport chain. +${income} ATP (mitochondria made none)` : `Wave ${S.wave} held. +${income} ATP`);
+  const nx=S.wave+1;
+  setHint(nx===HARD_FROM ? "Waves 31–50 are the danger zone: tougher, faster threats and mutant viruses. Upgrade your organelles first." : SAQ_WAVES[nx] ? `Next up: a free-response question before wave ${nx}. Good answers earn big rewards.` : BOSS_AT[nx] ? `Wave ${nx} is a boss wave. Get ready.` : "Build, upgrade, or study for ATP, then start the next wave.");
 }
 
 // ---------- loop ----------
@@ -693,12 +747,13 @@ function frame(now){
 const $ = id => document.getElementById(id);
 const overlay=$("overlay"), modal=$("modal");
 function updateHUD(){
-  $("gold").textContent=S.gold; $("trade").textContent=S.trade; $("wave").textContent=`${S.wave}/10`;
+  $("gold").textContent=S.gold; $("trade").textContent=S.trade; $("wave").textContent=`${S.wave}/${TOTAL}`;
   $("tradeBox").classList.toggle("low", S.trade<=6);
   const sb=$("startBtn");
-  sb.disabled = S.running || S.wave>=10;
-  sb.innerHTML = S.running ? `Wave ${S.wave+1} in progress` : (S.wave>=10 ? "Level complete" : `Start wave ${S.wave+1} <span class="key">Space</span>`);
-  const st=$("studyBtn"); st.disabled = S.running || S.studyLeft<=0 || S.wave>=10;
+  sb.disabled = S.running || S.wave>=TOTAL;
+  sb.innerHTML = S.running ? `Wave ${S.wave+1} in progress` : (S.wave>=TOTAL ? "Level complete" : `Start wave ${S.wave+1} <span class="key">Space</span>`);
+  const st=$("studyBtn"); st.disabled = S.running || S.studyLeft<=0 || S.wave>=TOTAL;
+  const rb=$("repairBtn"); rb.disabled = S.running || S.trade>=20 || S.gold<REPAIR_COST || S.wave>=TOTAL;
   st.textContent = S.studyLeft>0 ? `Study for ATP (+25) · ${S.studyLeft} left` : "Study again after the next wave";
   updateHUDShop();
   if(selected) renderSelLight();
@@ -730,10 +785,10 @@ function renderSel(){
   if(b.kind==="bank") facts.push(`Makes ${Math.round(st.income)} ATP after each wave`);
   const syn=[...t.syn].map(s=>`<span class="chip" title="${COMBOS[s].effect}">${COMBOS[s].name}</span>`).join("");
   const refund=Math.round(t.spent*0.7);
-  box.innerHTML=`<div class="eyebrow">Level ${t.level} of 3</div><h3>${b.name}</h3>
+  box.innerHTML=`<div class="eyebrow">Level ${t.level} of 5</div><h3>${b.name}</h3>
     <p>${facts.join("<br>")}</p>${syn?`<p>${syn}</p>`:""}
     <p class="muted">${b.bio}</p>
-    <div class="row">${t.level<3?`<button class="btn primary" id="upBtn">Upgrade (${upgradeCost(t)})</button>`:""}<button class="btn danger" id="sellBtn">Recycle (+${refund})</button></div>`;
+    <div class="row">${t.level<5?`<button class="btn primary" id="upBtn">Upgrade (${upgradeCost(t)})</button>`:""}<button class="btn danger" id="sellBtn">Recycle (+${refund})</button></div>`;
   const up=$("upBtn"); if(up){ up.disabled=S.gold<upgradeCost(t); up.onclick=()=>{ const c=upgradeCost(t); if(S.gold<c) return; S.gold-=c; t.spent+=c; t.level++; renderSel(); updateHUD(); }; }
   $("sellBtn").onclick=()=>{ S.gold+=refund; S.towers=S.towers.filter(x=>x!==t); selected=null; computeSynergy(false); renderSel(); updateHUD(); };
 }
@@ -819,7 +874,7 @@ function askSAQ(id, onDone){
   const hasKey=!!getKey();
   openModal(`<div class="eyebrow">Free-response question · before wave ${S.wave+1}</div>
     <h2>${esc(s.title)}</h2>
-    <p class="muted">Answer each part in one to three sentences. Reward: ${esc(s.reward)}. ${hasKey?"Claude will mark your answers.":"You will mark your answers against the scoring guide."}</p>
+    <p class="muted">Answer each part in one to three sentences. Reward: ${BOSS_AT[S.wave+1] ? `weakens the ${ENEMIES[BOSS_AT[S.wave+1]].name} by 15% per point, plus 30 ATP per point` : "+50 ATP per point"}. ${hasKey?"Claude will mark your answers.":"You will mark your answers against the scoring guide."}</p>
     ${stimHTML(s.stim)}
     ${s.parts.map(p=>`<label class="part" for="saq-${p.p}">(${p.p}) ${esc(p.q)}</label><textarea id="saq-${p.p}"></textarea>`).join("")}
     <div class="actions"><button class="btn primary" id="saqSubmit">Submit answers</button></div>`);
@@ -849,8 +904,9 @@ function showSAQResult(id, answers, pts, feedback, onDone, self){
   const s=SAQS[id], total=pts.reduce((a,b)=>a+b,0), n=s.parts.length;
   SAVE.saq.push({id, date:new Date().toISOString().slice(0,10), score:total, of:n, by:self?"self":"Claude", answers}); persist();
   let reward="";
-  if(id==="frq1"){ S.gold+=50*total; reward=`+${50*total} ATP`; }
-  if(id==="frq2"){ S.gold+=30*total; S.bossMult=1-0.15*total; reward=`+${30*total} ATP, and the Rogue Growth Signal starts ${15*total}% weaker`; }
+  const boss=BOSS_AT[S.wave+1];
+  if(boss){ S.gold+=30*total; S.bossMult=1-0.15*total; reward=`+${30*total} ATP, and the ${ENEMIES[boss].name} starts ${15*total}% weaker`; }
+  else { S.gold+=50*total; reward=`+${50*total} ATP`; }
   openModal(`<div class="eyebrow">Free-response result</div><h2>${total} of ${n} points</h2>
     <p><b>${total? "Reward: "+reward+"." : "No reward this time. Read the guide below and use it next time."}</b></p>
     ${s.parts.map((p,i)=>`<div class="rubric"><b>(${p.p}) ${pts[i]?"1 point":"0 points"}</b>${feedback&&feedback[i]?`<p style="margin:4px 0">${esc(feedback[i])}</p>`:""}
@@ -877,14 +933,14 @@ async function gradeWithClaude(s, answers){
 
 // ---------- flow ----------
 function startWave(){
-  if(S.running || S.wave>=10 || !overlay.hidden) return;
+  if(S.running || S.wave>=TOTAL || !overlay.hidden) return;
   placing=null; renderShop();
   const n=S.wave+1;
   if(SAQ_WAVES[n]) askSAQ(SAQ_WAVES[n], beginWave);
   else askMCQ({eyebrow:`Lab report · before wave ${n}`, reward:40, onDone:()=>beginWave()});
 }
 function study(){
-  if(S.running || S.studyLeft<=0 || !overlay.hidden) return;
+  if(S.running || S.studyLeft<=0 || S.wave>=TOTAL || !overlay.hidden) return;
   S.studyLeft--; updateHUD();
   askMCQ({eyebrow:"Study session", reward:25, onDone:()=>{}});
 }
@@ -904,10 +960,10 @@ function victory(){
   const lv = SAVE.levels[LEVEL_ID] || {stars:0, clears:0};
   lv.stars=Math.max(lv.stars||0, stars); lv.clears=(lv.clears||0)+1; lv.bestTrade=Math.max(lv.bestTrade||0,S.trade); lv.lastClear=new Date().toISOString().slice(0,10);
   SAVE.levels[LEVEL_ID]=lv; persist(); drop(SNAP_KEY);
-  openModal(`<div class="eyebrow">Level 1 complete</div><h2>The cell survived</h2>
+  openModal(`<div class="eyebrow">Level 1 complete · all 50 waves</div><h2>The cell survived</h2>
     <div class="stars" aria-label="${stars} of 3 stars">${"★".repeat(stars)}${"☆".repeat(3-stars)}</div>
     <p>Health left: <b>${S.trade}</b> of 20 · Questions right this run: <b>${S.runRight} of ${S.runAsked}</b> (${acc}%)</p>
-    <p class="muted">Three stars needs 15+ Health and 80% of questions right. Questions you missed will come back first next time.</p>
+    <p class="muted">Three stars needs 15+ Health at the end and 80% of questions right. Questions you missed will come back first next time.</p>
     <div class="actions"><button class="btn" id="prog">See progress</button><button class="btn primary" id="again">Play again</button></div>`);
   $("again").onclick=()=>{ closeModal(); newRun(); };
   $("prog").onclick=showProgress;
@@ -915,7 +971,7 @@ function victory(){
 function gameOver(){
   const sn=load(SNAP_KEY,null);
   openModal(`<div class="eyebrow">Cell lost</div><h2>The nucleus was overrun on wave ${S.wave+1}</h2>
-    <p>Try more Cytoskeleton to slow threats down, put a Cytoskeleton next to a Central Vacuole, and pair a Chloroplast with a Mitochondrion for more ATP.</p>
+    <p>${S.wave+1>=HARD_FROM ? "The danger zone rewards upgrades: level 4 and 5 organelles hit far harder than new level 1 ones. " : ""}Try more Cytoskeleton to slow threats down, put a Cytoskeleton next to a Central Vacuole, and pair a Chloroplast with a Mitochondrion for more ATP.</p>
     <div class="actions">${sn?`<button class="btn" id="retry">Retry wave ${sn.wave+1}</button>`:""}<button class="btn primary" id="restart">Restart level</button></div>`);
   if(sn) $("retry").onclick=()=>{ closeModal(); restore(sn); };
   $("restart").onclick=()=>{ closeModal(); newRun(); };
@@ -924,11 +980,11 @@ function gameOver(){
 // ---------- menus ----------
 function showStart(){
   const sn=load(SNAP_KEY,null), lv=SAVE.levels[LEVEL_ID];
-  openModal(`<div class="eyebrow">AP Biology</div><h2>Cell Defense</h2>
+  openModal(`<div class="eyebrow">AP Biology · version 1.1</div><h2>Cell Defense</h2>
     <p>Defend a living cell. Every tower is a real part of the cell, you spend ATP (the cell's energy) to build, and you earn more by answering exam-style questions built on real experiments and data.</p>
     <div class="grid2">
       <div class="levelcard"><div class="eyebrow">Level 1 · The Cell</div><b>A plant cell under attack</b>
-        <span class="muted">Campbell ch. 6–12 (AP Units 2–4) · 10 waves${lv?` · Best: ${"★".repeat(lv.stars)}${"☆".repeat(3-lv.stars)}`:""}</span></div>
+        <span class="muted">Campbell ch. 6–12 (AP Units 2–4) · 50 waves, a boss every 10${lv?` · Best: ${"★".repeat(lv.stars)}${"☆".repeat(3-lv.stars)}`:""}</span></div>
       <div class="levelcard locked"><div class="eyebrow">Level 2</div><b>Coming later</b><span class="muted">Heredity and gene expression</span></div>
     </div>
     <ul class="how">
@@ -936,7 +992,9 @@ function showStart(){
       <li>Before each wave you answer one data question. Right answers pay 40 ATP.</li>
       <li>Chloroplasts and mitochondria make ATP after every wave. Cyanide that gets through shuts your mitochondria down for that wave.</li>
       <li>Put organelles that work together side by side to discover connections and bonuses.</li>
-      <li>Waves 5 and 10 open with a free-response experiment question, like the real exam.</li>
+      <li>A boss attacks every 10 waves. Beat it and DNA repair restores your Health to 20. Between waves you can also spend 150 ATP to repair 2 Health.</li>
+      <li>Waves 31–50 are the danger zone: tougher, faster threats and mutant viruses. Organelles now upgrade to level 5.</li>
+      <li>Waves 5, 10, 20, 30, 40 and 50 open with a free-response experiment question, like the real exam. The one before a boss weakens it.</li>
     </ul>
     <p class="muted" style="font-size:13px">Progress saves automatically in this browser. Keys: 1–6 pick an organelle, Space starts a wave, Esc cancels.</p>
     <div class="actions">${sn&&sn.level===LEVEL_ID?`<button class="btn" id="cont">Continue run (wave ${sn.wave+1})</button>`:""}<button class="btn primary" id="new">New run</button></div>`);
@@ -951,7 +1009,9 @@ function showCodex(){
       ? `<div class="rubric"><b>${esc(cb.name)}</b>: ${esc(TOWERS[cb.a].name)} + ${esc(TOWERS[cb.b].name)}<p style="margin:4px 0;font-size:14px">${esc(cb.why)}</p></div>`
       : `<div class="rubric muted">Undiscovered. Try placing two organelles that depend on each other side by side.</div>`).join("")}
     <h3 class="sec">Threats</h3>
-    <p style="font-size:14px"><b>Free radicals</b> are unstable, highly reactive molecules (often forms of oxygen) that damage membranes, proteins and DNA. <b>Toxins</b> are harmful chemicals; plant cells can lock some away in the vacuole. <b>Viruses</b> get inside cells and hijack their machinery to make more viruses. <b>Cyanide</b> blocks the last step of the electron transport chain in mitochondria (ch. 9). <b>The Rogue Growth Signal</b> stands for a signalling pathway stuck "on" that tells the cell to divide when it shouldn't. If the cell-cycle checkpoints fail too, the result is uncontrolled division: cancer (ch. 11–12).</p>
+    <p style="font-size:14px"><b>Free radicals</b> are unstable, highly reactive molecules (often forms of oxygen) that damage membranes, proteins and DNA. <b>Toxins</b> are harmful chemicals; plant cells can lock some away in the vacuole. <b>Viruses</b> get inside cells and hijack their machinery to make more viruses. <b>Cyanide</b> blocks the last step of the electron transport chain in mitochondria (ch. 9). <b>Mutant viruses</b> (waves 31–50) show why viruses are hard to stop: they copy their genes carelessly, so new variants appear quickly.</p>
+    <h3 class="sec">Bosses</h3>
+    <p style="font-size:14px"><b>Wave 10, Rogue Growth Signal:</b> a signalling pathway stuck "on" that tells the cell to divide when it shouldn't (ch. 11). <b>Wave 20, Giant Virus:</b> giant viruses are real; some are bigger than small bacteria. <b>Wave 30, Oxidative Storm:</b> a burst of free radicals, the kind of damage peroxisomes and antioxidants limit. <b>Wave 40, Cyanide Cloud:</b> blocks the electron transport chain, so if it gets through your mitochondria make no ATP (ch. 9). <b>Wave 50, Runaway Division:</b> a cell that has escaped every cell-cycle checkpoint. When you destroy it, it splits into daughter cells, because uncontrolled mitosis is what cancer is (ch. 12).</p>
     <p class="muted" style="font-size:13px">Game simplifications: real organelles don't shoot, and the cytoskeleton supports and moves things rather than trapping invaders. The biology on every card is accurate.</p>
     <div class="actions"><button class="btn primary" id="x">Close</button></div>`);
   $("x").onclick=closeModal;
@@ -1020,6 +1080,7 @@ function showSettings(){
 // ---------- wiring ----------
 $("startBtn").onclick=startWave;
 $("studyBtn").onclick=study;
+$("repairBtn").onclick=()=>{ if(S.running || S.trade>=20 || S.gold<REPAIR_COST) return; S.gold-=REPAIR_COST; S.trade=Math.min(20,S.trade+2); updateHUD(); toast("DNA repair enzymes fixed the damage: +2 Health"); };
 $("speedBtn").onclick=()=>{ S.speed = S.speed===1?2:S.speed===2?3:1; $("speedBtn").textContent=S.speed+"×"; };
 $("codexBtn").onclick=showCodex; $("progressBtn").onclick=showProgress; $("settingsBtn").onclick=showSettings;
 $("menuBtn").onclick=()=>{ if(S.running){ toast("Finish the wave first. Your run saves after every wave."); return; } showStart(); };
@@ -1030,7 +1091,7 @@ document.addEventListener("keydown", e=>{
   else { const id=Object.keys(TOWERS).find(k=>TOWERS[k].key===e.key); if(id) selectTower(id); }
 });
 
-window.__cd = { get S(){ return S; }, QUESTIONS, SAQS };
+window.__cd = { get S(){ return S; }, QUESTIONS, SAQS, upgradeCost, computeSynergy };
 newRun(); SAVE.runs--; persist();
 showStart();
 requestAnimationFrame(frame);
